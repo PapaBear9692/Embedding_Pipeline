@@ -26,7 +26,7 @@ def retry(func, retries=3, delay=5, backoff=2, exception_type=Exception):
 def generate_metadata_and_upsert(
     input_path="data_cache/embedded_chunks.jsonl",
     log_path="data_cache/uploaded_ids.json",
-    batch_size=50,
+    batch_size=5,
     delay=10,
     max_retries=3
 ):
@@ -56,6 +56,7 @@ def generate_metadata_and_upsert(
     # 3. Initialize components
     meta_generator = LLMMetaGenerator()
     storage = PineconeStorage()
+    storage.connect_to_index()
 
     vectors_to_upsert, uploaded_now = [], []
 
