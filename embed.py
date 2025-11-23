@@ -40,14 +40,25 @@ def embed_and_save(output_path="data_cache/embedded_chunks.jsonl"):
     Path("data_cache").mkdir(exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
         for chunk, emb in zip(chunks, embeddings):
+
+            source_path = chunk.metadata.get("source", "unknown")
+            pdf_name = Path(source_path).name  # e.g., "drugA.pdf"
+            pdf_name = pdf_name.replace("_sup_", "").replace(".pdf", "")
+
+            # Prepend filename to the text content
+            combined_text = f"[{pdf_name}]\n{chunk.page_content}"
+
             record = {
                 "id": str(uuid.uuid4()),
-                "text": chunk.page_content,
+                "text": combined_text,               
                 "embedding": emb,
-                "source": chunk.metadata.get("source", "unknown"),
-                "page": chunk.metadata.get("page", None)
+                "source": source_path,
+                "page": chunk.metadata.get("page", None),
+                "Drug Name": pdf_name
             }
+
             f.write(json.dumps(record) + "\n")
+
 
     print(f"✅ Saved {len(chunks)} embedded chunks to {output_path}")
     print("--- Embedding Extraction Complete ---")

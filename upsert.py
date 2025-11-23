@@ -67,7 +67,7 @@ def generate_metadata_and_upsert(
 
         #print(f"[{i}/{len(records)}] Generating metadata...")
 
-        # Retry metadata generation
+        #Retry metadata generation
         #def generate_meta():
         #    return meta_generator.generate_metadata(record["text"])
 
@@ -77,10 +77,14 @@ def generate_metadata_and_upsert(
         #    print(f" Skipping chunk due to repeated LLM failure: {e}")
         #    continue
 
+        raw_name = record.get("Drug Name", "unknown")
+        clean_name = raw_name.replace("_sup_", "").replace(".pdf", "")
+
         metadata = {
             "text": record["text"],
             "source": record.get("source", "unknown"),
             "page": record.get("page", None),
+            "drug_name": clean_name,
             #**llm_metadata,
         }
 
