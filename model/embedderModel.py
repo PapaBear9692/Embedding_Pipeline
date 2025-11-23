@@ -70,6 +70,12 @@ def get_embedder(provider: str) -> BaseEmbedder:
         dimension = EMBEDDING_DIMENSIONS["PubMedBert"]
         print(f"Using PubMedBert Embedder: {model_name}")
         return HuggingFaceEmbedder(model_name, dimension)
+    
+    elif provider == "MedEmbed":
+        model_name = EMBEDDER_MODELS["MedEmbed"]
+        dimension = EMBEDDING_DIMENSIONS["MedEmbed"]
+        print(f"Using MedEmbed Embedder: {model_name}")
+        return HuggingFaceEmbedder(model_name, dimension)
 
     elif provider == "openai":
         model_name = EMBEDDER_MODELS["openai"]

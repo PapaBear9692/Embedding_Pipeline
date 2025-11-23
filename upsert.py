@@ -54,7 +54,7 @@ def generate_metadata_and_upsert(
     print(f"Loaded {len(records)} embedded chunks.")
 
     # 3. Initialize components
-    meta_generator = LLMMetaGenerator()
+    #meta_generator = LLMMetaGenerator()
     storage = PineconeStorage()
     storage.connect_to_index()
 
@@ -65,23 +65,23 @@ def generate_metadata_and_upsert(
         if record["id"] in uploaded_ids:
             continue
 
-        print(f"[{i}/{len(records)}] Generating metadata...")
+        #print(f"[{i}/{len(records)}] Generating metadata...")
 
         # Retry metadata generation
-        def generate_meta():
-            return meta_generator.generate_metadata(record["text"])
+        #def generate_meta():
+        #    return meta_generator.generate_metadata(record["text"])
 
-        try:
-            llm_metadata = retry(generate_meta, retries=max_retries, delay=5)
-        except Exception as e:
-            print(f" Skipping chunk due to repeated LLM failure: {e}")
-            continue
+        #try:
+        #    llm_metadata = retry(generate_meta, retries=max_retries, delay=5)
+        #except Exception as e:
+        #    print(f" Skipping chunk due to repeated LLM failure: {e}")
+        #    continue
 
         metadata = {
             "text": record["text"],
             "source": record.get("source", "unknown"),
             "page": record.get("page", None),
-            **llm_metadata,
+            #**llm_metadata,
         }
 
         vectors_to_upsert.append({
@@ -91,8 +91,8 @@ def generate_metadata_and_upsert(
         })
         uploaded_now.append(record["id"])
 
-        print(f"  ↳ Topic: {llm_metadata.get('topic', 'N/A')}")
-        time.sleep(delay)
+        #print(f"  ↳ Topic: {llm_metadata.get('topic', 'N/A')}")
+        #time.sleep(delay)
 
         # Batch upsert
         if len(vectors_to_upsert) >= batch_size:
