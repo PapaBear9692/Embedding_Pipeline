@@ -30,27 +30,32 @@ def embed_and_save(output_path="data_cache/embedded_chunks.jsonl"):
 
     print(f"Split into {len(chunks)} chunks...")
 
-    # 4. Embed chunks
+    # 4. Prepare combined text for embedding
+    combined_texts = []
+    for chunk in chunks:
+        source_path = chunk.metadata.get("source", "unknown")
+        pdf_name = Path(source_path).name
+        pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
+        
+        combined_text = f"[{pdf_name}]\n{chunk.page_content}"
+        combined_texts.append(combined_text)
+
+    # 5. Embed chunks
     print(f"Embedding {len(chunks)} chunks... This may take a while.")
-    chunk_texts = [chunk.page_content for chunk in chunks]
-    embeddings = embedder.embed_documents(chunk_texts)
+    embeddings = embedder.embed_documents(combined_texts)
     print("Embedding complete.")
 
-    # 5. Save to JSONL
+    # 6. Save to JSONL
     Path("data_cache").mkdir(exist_ok=True)
     with open(output_path, "w", encoding="utf-8") as f:
-        for chunk, emb in zip(chunks, embeddings):
-
+        for chunk, emb, combined_text in zip(chunks, embeddings, combined_texts):
             source_path = chunk.metadata.get("source", "unknown")
-            pdf_name = Path(source_path).name  # e.g., "drugA.pdf"
-            pdf_name = pdf_name.replace("_sup_", "").replace(".pdf", "")
-
-            # Prepend filename to the text content
-            combined_text = f"[{pdf_name}]\n{chunk.page_content}"
-
+            pdf_name = Path(source_path).name
+            pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
+            
             record = {
                 "id": str(uuid.uuid4()),
-                "text": combined_text,               
+                "text": combined_text,
                 "embedding": emb,
                 "source": source_path,
                 "page": chunk.metadata.get("page", None),
@@ -58,6 +63,7 @@ def embed_and_save(output_path="data_cache/embedded_chunks.jsonl"):
             }
 
             f.write(json.dumps(record) + "\n")
+
 
 
     print(f"✅ Saved {len(chunks)} embedded chunks to {output_path}")
