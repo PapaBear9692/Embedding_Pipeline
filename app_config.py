@@ -41,9 +41,13 @@ EMBEDDING_DIMENSIONS = {
 }
 
 # --- Data Processing Config ---
-DATA_DIRECTORY = "data"
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 100
+DATA_DIR = "data"
+OUTPUT_PATH = "data_cache/embedded_nodes_hybrid.jsonl"
+
+CHUNK_SIZE = 400
+OVERLAP = 30
 
 # --- RAG Config ---
-TOP_K_RESULTS = 10
+TOP_K_RESULTS = 8
+
+USE_LLM_METADATA=True

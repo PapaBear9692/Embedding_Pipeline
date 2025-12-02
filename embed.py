@@ -2,16 +2,10 @@
 import json
 import uuid
 from pathlib import Path
-
+from app_config import DATA_DIR, EMBEDDER_MODELS, EMBEDDER_PROVIDER, GOOGLE_API_KEY, LLM_MODELS, LLM_PROVIDER, OUTPUT_PATH, CHUNK_SIZE, OVERLAP, USE_LLM_METADATA
 from llama_data_loader import load_documents, chunk_documents
 from llama_embedder import HybridEmbedder
 
-
-DATA_DIR = "data"
-OUTPUT_PATH = "data_cache/embedded_nodes_hybrid.jsonl"
-
-CHUNK_SIZE = 400
-OVERLAP = 30
 
 
 def embed_and_save():
@@ -25,8 +19,10 @@ def embed_and_save():
 
     print("# Initializing embedder (Hybrid Dense + Sparse + Metadata)...")
     embedder = HybridEmbedder(
-        dense_model="abhinand/MedEmbed-base-v0.1",
-        use_structured_metadata=False  # set True if needed
+        dense_model=EMBEDDER_MODELS[EMBEDDER_PROVIDER],
+        use_structured_metadata=USE_LLM_METADATA,
+        model_name= LLM_MODELS[LLM_PROVIDER],
+        google_api_key=GOOGLE_API_KEY
     )
 
     print("# Embedding nodes...")
