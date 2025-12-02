@@ -2,6 +2,7 @@
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.embeddings.bm25 import BM25Embedding
 from llama_index.core.extractors import SimpleMetadataExtractor
+from app_config import FILTERS
 
 
 class HybridEmbedder:
@@ -17,7 +18,6 @@ class HybridEmbedder:
     ):
         self.dense = HuggingFaceEmbedding(model_name=dense_model)
         self.sparse = BM25Embedding()
-
         self.use_structured_metadata = use_structured_metadata
 
         if use_structured_metadata:
@@ -27,11 +27,14 @@ class HybridEmbedder:
             from langchain.chat_models import ChatGoogleGemini
             
             llm = ChatGoogleGemini(api_key=google_api_key, model=model_name)
+
+            # Only one field "filter_by", LLM picks one or more from FILTERS
             self.extractor = SimpleMetadataExtractor(
                 llm=llm,
-                fields=["drug_name", "side_effects", "dosage", "drug_for_general_term", "interactions", "precautions","warnings", "usage_instructions", "storage_instructions"]
+                fields=["filter_by"],
+                allowed_values=FILTERS,
+                multiple=True  # allow LLM to pick multiple if relevant
             )
-
 
     def embed_text(self, text: str):
         return {

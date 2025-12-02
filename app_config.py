@@ -51,3 +51,17 @@ OVERLAP = 30
 TOP_K_RESULTS = 8
 
 USE_LLM_METADATA=True
+
+FILTERS = [
+    # General medicine types
+    "painkiller", "fever reducer", "fever", "antibiotic", "cold medicine",
+    "allergy_medicine", "vitamin", "supplement", "sleep aid",
+    "steroid", "anti inflammatory", "cough medicine", "stomach medicine",
+    "heart_medicine", "diabetes medicine", "eye medicine", "ear medicine",
+    "skin cream", "nasal spray", "antidepressant", "antiviral", "cold", "cough",
+    "gastrincs", "headache", "infection", "inflammation",
+
+    # Common medical document sections
+    "dosage", "usage", "side_effects", "warnings", "precautions",
+    "interactions", "storage", "indications", "contraindications"
+]
