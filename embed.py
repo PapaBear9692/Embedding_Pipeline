@@ -10,26 +10,26 @@ from llama_embedder import HybridEmbedder
 DATA_DIR = "data"
 OUTPUT_PATH = "data_cache/embedded_nodes_hybrid.jsonl"
 
-CHUNK_SIZE = 800
-OVERLAP = 100
+CHUNK_SIZE = 400
+OVERLAP = 30
 
 
 def embed_and_save():
-    print("📌 Loading documents...")
+    print("# Loading documents...")
     docs = load_documents(DATA_DIR)
     print(f"Loaded {len(docs)} docs")
 
-    print("📌 Chunking...")
+    print("# Chunking...")
     nodes = chunk_documents(docs, chunk_size=CHUNK_SIZE, overlap=OVERLAP)
     print(f"Created {len(nodes)} nodes")
 
-    print("📌 Initializing embedder (Hybrid Dense + Sparse + Metadata)...")
+    print("# Initializing embedder (Hybrid Dense + Sparse + Metadata)...")
     embedder = HybridEmbedder(
         dense_model="abhinand/MedEmbed-base-v0.1",
         use_structured_metadata=False  # set True if needed
     )
 
-    print("📌 Embedding nodes...")
+    print("# Embedding nodes...")
     Path("data_cache").mkdir(exist_ok=True)
 
     with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
