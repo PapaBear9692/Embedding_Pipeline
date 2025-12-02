@@ -1,130 +1,91 @@
-# metadata_and_upsert_resumable_retry.py
+# upsert.py
 import json
 import time
 from pathlib import Path
-from model.llm_meta_generator import LLMMetaGenerator
-from model.storageModel import PineconeStorage
 
-# ---------- Helper: retry wrapper ----------
-def retry(func, retries=3, delay=5, backoff=2, exception_type=Exception):
-    """
-    Retry helper for transient errors.
-    """
+from pinecone_storage import PineconeStorage
+
+
+# ---- Retry Helper ----
+def retry(fn, retries=3, delay=5, backoff=2):
     for attempt in range(1, retries + 1):
         try:
-            return func()
-        except exception_type as e:
-            print(f"[Retry {attempt}/{retries}] {func.__name__} failed: {e}")
-            if attempt < retries:
-                time.sleep(delay)
-                delay *= backoff
-            else:
-                print(f" Failed after {retries} retries.")
+            return fn()
+        except Exception as e:
+            print(f"[Retry {attempt}/{retries}] {e}")
+            if attempt == retries:
                 raise
+            time.sleep(delay)
+            delay *= backoff
 
-# ---------- Main pipeline ----------
-def generate_metadata_and_upsert(
-    input_path="data_cache/embedded_chunks.jsonl",
-    log_path="data_cache/uploaded_ids.json",
-    batch_size=50,
-    delay=10,
-    max_retries=3
-):
-    print("--- Starting Metadata Generation + Pinecone Upsert (Resumable + Retry) ---")
+
+# ---- Main Pipeline ----
+def upsert_embedded_chunks(
+        input_path="data_cache/embedded_chunks.jsonl",
+        log_path="data_cache/uploaded_ids.json",
+        batch_size=50,
+        max_retries=3):
+    print("🚀 Starting Pinecone Upsertion")
 
     input_file = Path(input_path)
     log_file = Path(log_path)
     log_file.parent.mkdir(exist_ok=True)
 
-    # 1. Load uploaded IDs
+    # Load resume log
     uploaded_ids = set()
     if log_file.exists():
-        with open(log_file, "r", encoding="utf-8") as f:
-            uploaded_ids = set(json.load(f))
-        print(f"Resuming from previous run — {len(uploaded_ids)} chunks already uploaded.")
+        uploaded_ids = set(json.loads(log_file.read_text()))
+        print(f"Resuming — already uploaded: {len(uploaded_ids)} chunks")
 
-    # 2. Load embedded chunks
+    # Load embedded chunks
     if not input_file.exists():
-        print(f"Error: Input file '{input_path}' not found.")
+        print(f"❌ Input file not found: {input_path}")
         return
 
-    with open(input_file, "r", encoding="utf-8") as f:
-        records = [json.loads(line.strip()) for line in f if line.strip()]
+    print("Loading embedded chunks...")
+    records = [json.loads(line) for line in input_file.read_text().splitlines()]
+    print(f"Loaded {len(records)} records")
 
-    print(f"Loaded {len(records)} embedded chunks.")
-
-    # 3. Initialize components
-    #meta_generator = LLMMetaGenerator()
+    # Pinecone setup
     storage = PineconeStorage()
-    storage.connect_to_index()
+    storage.connect()
 
-    vectors_to_upsert, uploaded_now = [], []
+    pending_batch = []
+    batch_ids = []
 
-    # 4. Process each record
-    for i, record in enumerate(records, start=1):
-        if record["id"] in uploaded_ids:
+    for idx, rec in enumerate(records, start=1):
+        if rec["id"] in uploaded_ids:
             continue
 
-        #print(f"[{i}/{len(records)}] Generating metadata...")
+        metadata = rec.get("metadata", {})
+        metadata["text"] = rec.get("text", "")
 
-        #Retry metadata generation
-        #def generate_meta():
-        #    return meta_generator.generate_metadata(record["text"])
-
-        #try:
-        #    llm_metadata = retry(generate_meta, retries=max_retries, delay=5)
-        #except Exception as e:
-        #    print(f" Skipping chunk due to repeated LLM failure: {e}")
-        #    continue
-
-        raw_name = record.get("Drug Name", "unknown")
-        clean_name = raw_name.replace("_sup_", "").replace(".pdf", "")
-
-        metadata = {
-            "text": record["text"],
-            "source": record.get("source", "unknown"),
-            "page": record.get("page", None),
-            "drug_name": clean_name,
-            #**llm_metadata,
-        }
-
-        vectors_to_upsert.append({
-            "id": record["id"],
-            "values": record["embedding"],
-            "metadata": metadata
+        pending_batch.append({
+            "id": rec["id"],
+            "values": rec["embedding"],
+            "metadata": metadata,
         })
-        uploaded_now.append(record["id"])
+        batch_ids.append(rec["id"])
 
-        #print(f"  ↳ Topic: {llm_metadata.get('topic', 'N/A')}")
-        #time.sleep(delay)
+        # If batch is full → upload
+        if len(pending_batch) >= batch_size:
+            print(f"⬆️ Upserting batch of {len(pending_batch)} vectors...")
+            retry(lambda: storage.upsert_vectors(pending_batch), retries=max_retries)
+            uploaded_ids.update(batch_ids)
 
-        # Batch upsert
-        if len(vectors_to_upsert) >= batch_size:
-            print(f" Upserting batch of {len(vectors_to_upsert)} vectors...")
-            try:
-                retry(lambda: storage.upsert_vectors(vectors_to_upsert), retries=max_retries, delay=5)
-                uploaded_ids.update(uploaded_now)
-                with open(log_file, "w", encoding="utf-8") as f:
-                    json.dump(list(uploaded_ids), f, indent=2)
-                vectors_to_upsert.clear()
-                uploaded_now.clear()
-            except Exception as e:
-                print(f" Batch upsert failed repeatedly: {e}")
+            log_file.write_text(json.dumps(list(uploaded_ids), indent=2))
+            pending_batch.clear()
+            batch_ids.clear()
 
-    # Final flush
-    if vectors_to_upsert:
-        print(f" Upserting final {len(vectors_to_upsert)} vectors...")
-        try:
-            retry(lambda: storage.upsert_vectors(vectors_to_upsert), retries=max_retries, delay=5)
-            uploaded_ids.update(uploaded_now)
-            with open(log_file, "w", encoding="utf-8") as f:
-                json.dump(list(uploaded_ids), f, indent=2)
-        except Exception as e:
-            print(f" Final upsert failed: {e}")
+    # Final leftover batch
+    if pending_batch:
+        print(f"⬆️ Upserting final batch ({len(pending_batch)})...")
+        retry(lambda: storage.upsert_vectors(pending_batch), retries=max_retries)
+        uploaded_ids.update(batch_ids)
+        log_file.write_text(json.dumps(list(uploaded_ids), indent=2))
 
-    print(f" Completed. Total uploaded: {len(uploaded_ids)}")
-    print("--- Resumable + Retry Pipeline Finished ---")
+    print(f"🎉 Finished. Total uploaded: {len(uploaded_ids)}")
 
 
 if __name__ == "__main__":
-    generate_metadata_and_upsert()
+    upsert_embedded_chunks()

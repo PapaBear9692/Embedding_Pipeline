@@ -23,7 +23,7 @@ def embed_and_save():
     print(f"Created {len(nodes)} chunks")
 
     print("📌 Loading embedder...")
-    embedder = LlamaEmbedder(provider="hf")  # provider="openai" / "hf"
+    embedder = LlamaEmbedder(provider="hf",  model_name="abhinand/MedEmbed-base-v0.1")  # provider="openai" / "hf"
 
     print("📌 Embedding...")
     for node in nodes:
