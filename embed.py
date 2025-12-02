@@ -30,19 +30,19 @@ def embed_and_save(output_path="data_cache/embedded_chunks.jsonl"):
 
     print(f"Split into {len(chunks)} chunks...")
 
-    # 4. Prepare combined text for embedding
-    combined_texts = []
-    for chunk in chunks:
-        source_path = chunk.metadata.get("source", "unknown")
-        pdf_name = Path(source_path).name
-        pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
+    # # 4. Prepare combined text for embedding
+    # combined_texts = []
+    # for chunk in chunks:
+    #     source_path = chunk.metadata.get("source", "unknown")
+    #     pdf_name = Path(source_path).name
+    #     pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
         
-        combined_text = f"[{pdf_name}]\n{chunk.page_content}"
-        combined_texts.append(combined_text)
+    #     combined_text = f"[{pdf_name}]\n{chunk.page_content}"
+    #     combined_texts.append(combined_text)
 
     # 5. Embed chunks
     print(f"Embedding {len(chunks)} chunks... This may take a while.")
-    embeddings = embedder.embed_documents(combined_texts)
+    embeddings = embedder.embed_documents(chunks)
     print("Embedding complete.")
 
     # 6. Save to JSONL
