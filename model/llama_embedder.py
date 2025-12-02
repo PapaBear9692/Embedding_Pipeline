@@ -1,22 +1,41 @@
 # llama_embedder.py
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.embeddings.openai import OpenAIEmbedding
+from llama_index.embeddings.bm25 import BM25Embedding
+from llama_index.llms.openai import OpenAI
+from llama_index.core.extractors import SimpleMetadataExtractor
 
 
-class LlamaEmbedder:
-    def __init__(self, provider="hf", model_name=None, openai_key=None):
-        if provider == "hf":
-            if model_name is None:
-                model_name = "sentence-transformers/all-MiniLM-L6-v2"
-            self.embedder = HuggingFaceEmbedding(model_name=model_name)
+class HybridEmbedder:
+    """
+    Dense + Sparse embedding + optional LLM metadata extraction.
+    """
+    def __init__(
+        self,
+        dense_model="abhinand/MedEmbed-base-v0.1",
+        use_structured_metadata=False,
+        openai_key=None
+    ):
+        self.dense = HuggingFaceEmbedding(model_name=dense_model)
+        self.sparse = BM25Embedding()
 
-        elif provider == "openai":
-            if openai_key is None:
-                raise ValueError("OpenAI API key is required")
-            self.embedder = OpenAIEmbedding(api_key=openai_key, model_name=model_name)
+        self.use_structured_metadata = use_structured_metadata
 
-        else:
-            raise ValueError("Unknown embedder provider")
+        if use_structured_metadata:
+            if not openai_key:
+                raise ValueError("OpenAI key required for metadata extraction")
+            llm = OpenAI(api_key=openai_key, model="gpt-4o-mini")
+            self.extractor = SimpleMetadataExtractor(
+                llm=llm,
+                fields=["drug_name", "side_effects", "dosage", "warnings"]
+            )
 
-    def embed(self, text: str):
-        return self.embedder.get_text_embedding(text)
+    def embed_text(self, text: str):
+        return {
+            "dense": self.dense.get_text_embedding(text),
+            "sparse": self.sparse.get_text_embedding(text),
+        }
+
+    def extract_structured_metadata(self, text: str):
+        if not self.use_structured_metadata:
+            return {}
+        return self.extractor.extract(text)
