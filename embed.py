@@ -1,73 +1,48 @@
-# embed_and_save.py
+# embed.py
 import uuid
 import json
 from pathlib import Path
-from model.dataLoaderModel import DataLoader
-from model.embedderModel import get_embedder
-from app_config import EMBEDDER_PROVIDER
 
-def embed_and_save(output_path="data_cache/embedded_chunks.jsonl"):
-    print("--- Starting Embedding Extraction Pipeline ---")
+from llama_data_loader import load_documents, chunk_documents
+from llama_embedder import LlamaEmbedder
 
-    # 1. Initialize components
-    data_loader = DataLoader()
-    embedder = get_embedder(EMBEDDER_PROVIDER)
-    print(f"Embedder loaded ({EMBEDDER_PROVIDER})")
 
-    # 2. Load documents
-    documents = data_loader.load_documents()
-    if not documents:
-        print("No documents found. Aborting...")
-        return
+DATA_DIR = "data"
+OUTPUT_PATH = "data_cache/embedded_chunks.jsonl"
+CHUNK_SIZE = 400
+CHUNK_OVERLAP = 30
 
-    print(f"Loaded {len(documents)} documents.")
 
-    # 3. Split documents into chunks
-    chunks = data_loader.split_documents(documents)
-    if not chunks:
-        print("No chunks created. Aborting...")
-        return
+def embed_and_save():
+    print("📌 Loading documents...")
+    docs = load_documents(DATA_DIR)
+    print(f"Loaded {len(docs)} documents")
 
-    print(f"Split into {len(chunks)} chunks...")
+    print("📌 Chunking...")
+    nodes = chunk_documents(docs, CHUNK_SIZE, CHUNK_OVERLAP)
+    print(f"Created {len(nodes)} chunks")
 
-    # # 4. Prepare combined text for embedding
-    # combined_texts = []
-    # for chunk in chunks:
-    #     source_path = chunk.metadata.get("source", "unknown")
-    #     pdf_name = Path(source_path).name
-    #     pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
-        
-    #     combined_text = f"[{pdf_name}]\n{chunk.page_content}"
-    #     combined_texts.append(combined_text)
+    print("📌 Loading embedder...")
+    embedder = LlamaEmbedder(provider="hf")  # provider="openai" / "hf"
 
-    # 5. Embed chunks
-    print(f"Embedding {len(chunks)} chunks... This may take a while.")
-    embeddings = embedder.embed_documents(chunks)
-    print("Embedding complete.")
+    print("📌 Embedding...")
+    for node in nodes:
+        node.embedding = embedder.embed(node.get_content())
 
-    # 6. Save to JSONL
+    print("📌 Saving JSONL...")
     Path("data_cache").mkdir(exist_ok=True)
-    with open(output_path, "w", encoding="utf-8") as f:
-        for chunk, emb, combined_text in zip(chunks, embeddings, combined_texts):
-            source_path = chunk.metadata.get("source", "unknown")
-            pdf_name = Path(source_path).name
-            pdf_name = pdf_name.replace("__sup__", "").replace(".pdf", "")
-            
-            record = {
-                "id": str(uuid.uuid4()),
-                "text": combined_text,
-                "embedding": emb,
-                "source": source_path,
-                "page": chunk.metadata.get("page", None),
-                "Drug Name": pdf_name
-            }
 
+    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
+        for node in nodes:
+            record = {
+                "id": node.node_id or str(uuid.uuid4()),
+                "text": node.get_content(),
+                "embedding": node.embedding,
+                "metadata": node.metadata,
+            }
             f.write(json.dumps(record) + "\n")
 
-
-
-    print(f"✅ Saved {len(chunks)} embedded chunks to {output_path}")
-    print("--- Embedding Extraction Complete ---")
+    print(f"✅ Done — saved {len(nodes)} chunks to {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
