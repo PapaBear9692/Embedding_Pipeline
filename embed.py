@@ -2,8 +2,8 @@
 import json
 from pathlib import Path
 import uuid
-from llama_hybrid_embedder import HybridEmbedder
-from llama_data_loader import load_documents, chunk_documents
+from model.llama_embedder import HybridEmbedder
+from model.llama_data_loader import load_documents, chunk_documents
 from app_config import (
     DATA_DIR,
     EMBEDDER_MODELS,

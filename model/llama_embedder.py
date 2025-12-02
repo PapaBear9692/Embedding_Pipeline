@@ -1,8 +1,7 @@
 # llama_hybrid_embedder.py
-from llama_index.embeddings.base import BaseEmbedding
-from llama_index.retrievers.bm25_retriever import BM25Retriever
-from llama_index.core.extractors import SimpleMetadataExtractor
-from langchain.chat_models import ChatGoogleGemini
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
+from llama_index.llms.gemini import Gemini
+from llama_index.retrievers.bm25 import BM25Retriever
 from app_config import FILTERS
 
 class HybridEmbedder:
@@ -13,12 +12,8 @@ class HybridEmbedder:
         self.dense_model = dense_model
         self.use_structured_metadata = use_structured_metadata
 
-        # Dense embedding class
-        class MedEmbedEmbedding(BaseEmbedding):
-            def get_text_embedding(self, text):
-                # Replace with your MedEmbed client call
-                return dense_model.embed(text)
-        self.dense = MedEmbedEmbedding()
+        
+        self.dense = HuggingFaceEmbedding(model_name=model_name)
 
         # Sparse embedding retriever
         self.sparse = BM25Retriever.from_defaults(nodes=[])
@@ -27,7 +22,7 @@ class HybridEmbedder:
         if use_structured_metadata:
             if not google_api_key:
                 raise ValueError("Google API key required for metadata extraction")
-            llm = ChatGoogleGemini(api_key=google_api_key, model=model_name)
+            llm = Gemini(api_key=google_api_key, model=model_name)
             self.extractor = SimpleMetadataExtractor(
                 llm=llm,
                 fields=["filter_by"],

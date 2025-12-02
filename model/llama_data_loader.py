@@ -8,6 +8,7 @@ from doctr.models import ocr_predictor
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 from llama_index.core.schema import RelatedNodeInfo, NodeRelationship
+from llama_index.core import SimpleDirectoryReader
 
 def extract_doctr_text(page: dict) -> str:
     lines = []
