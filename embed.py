@@ -1,72 +1,58 @@
-# embed.py
-import json
-import uuid
-from pathlib import Path
-from model.llama_data_loader import load_documents, chunk_documents
-from model.llama_embedder import HybridEmbedder
-from app_config import (
-    DATA_DIR,
-    EMBEDDER_MODELS,
-    EMBEDDER_PROVIDER,
-    OUTPUT_PATH,
-    CHUNK_SIZE,
-    OVERLAP,
-    USE_LLM_METADATA,
+from app_config import DATA_DIR, OUTPUT_FILE
+
+from model.data_loader import (
+    create_llm,
+    load_documents,
+    chunk_documents,
+    preprocess_nodes,
+    prefix_source_in_text,
+    enrich_metadata,
+    normalize_tags_and_index,
+)
+
+from model.embedder import (
+    embed_nodes,
+    add_splade_sparse_vectors,
+    save_nodes_to_jsonl,
 )
 
 
+# -----------------------------
+# Main pipeline
+# -----------------------------
+def main():
+    # Create LLM ONCE and reuse it
+    llm = create_llm()
 
+    print("Loading documents...")
+    documents = load_documents(DATA_DIR)
 
-def embed_and_save():
-    print("# Loading documents...")
-    docs = load_documents(DATA_DIR)
-    print(f"Loaded {len(docs)} documents")
+    print("Chunking documents...")
+    nodes = chunk_documents(documents)
 
-    print("# Chunking...")
-    nodes = chunk_documents(docs, chunk_size=CHUNK_SIZE, overlap=OVERLAP)
-    print(f"Created {len(nodes)} chunks")
+    print("Cleaning text...")
+    nodes = preprocess_nodes(nodes)
 
-    print("# Initializing HybridEmbedder...")
-    embedder = HybridEmbedder(
-        dense_model=EMBEDDER_MODELS[EMBEDDER_PROVIDER],
-        use_structured_metadata=USE_LLM_METADATA,
-    )
+    print("Adding filename prefix to chunks...")
+    nodes = prefix_source_in_text(nodes)
 
-    print("# Embedding nodes...")
-    Path("data_cache").mkdir(exist_ok=True)
+    print("Enriching metadata (filter_by + section) with a single LLM call per chunk...")
+    nodes = enrich_metadata(nodes, llm)
 
-    with open(OUTPUT_PATH, "w", encoding="utf-8") as f:
-        for node in nodes:
-            text = node.get_content()
+    print("Normalizing tags and adding doc_id/chunk_index/drug_name/keywords...")
+    nodes = normalize_tags_and_index(nodes)
 
-            # Hybrid embedding
-            emb = embedder.embed_text(text)
+    print("Generating dense embeddings...")
+    nodes = embed_nodes(nodes)
 
-            # Base metadata from loader/chunker
-            metadata = dict(node.metadata)
+    print("Generating SPLADE sparse vectors...")
+    nodes = add_splade_sparse_vectors(nodes)
 
-            # Optional: structured metadata extraction (Gemini)
-            if embedder.use_structured_metadata:
-                extracted = embedder.extract_structured_metadata(text)
-                metadata.update(extracted)
+    print(f"Saving nodes to: {OUTPUT_FILE}")
+    save_nodes_to_jsonl(nodes, OUTPUT_FILE)
 
-            record = {
-                "id": node.node_id or str(uuid.uuid4()),
-                "text": text,
-                "dense": emb["dense"],
-                "sparse": emb["sparse"],
-                "metadata": metadata,
-                "relationships": {
-                rel.name: getattr(info, "node_id", info.get("node_id") if isinstance(info, dict) else None)
-                for rel, info in node.relationships.items()
-            },
-
-            }
-
-            f.write(json.dumps(record) + "\n")
-
-    print(f"✅ Saved {len(nodes)} hybrid-embedded nodes → {OUTPUT_PATH}")
+    print("Pipeline complete!")
 
 
 if __name__ == "__main__":
-    embed_and_save()
+    main()

@@ -42,9 +42,9 @@ EMBEDDING_DIMENSIONS = {
 
 # --- Data Processing Config ---
 DATA_DIR = "data"
-OUTPUT_PATH = "data_cache/embedded_nodes_hybrid.jsonl"
+OUTPUT_FILE = "data_cache/embedded_nodes_hybrid.jsonl"
 
-CHUNK_SIZE = 400
+CHUNK_SIZE = 350
 OVERLAP = 30
 
 # --- RAG Config ---
@@ -55,13 +55,34 @@ USE_LLM_METADATA=True
 FILTERS = [
     # General medicine types
     "painkiller", "fever reducer", "fever", "antibiotic", "cold medicine",
-    "allergy_medicine", "vitamin", "supplement", "sleep aid",
+    "allergy medicine", "vitamin", "supplement", "sleep aid",
     "steroid", "anti inflammatory", "cough medicine", "stomach medicine",
     "heart_medicine", "diabetes medicine", "eye medicine", "ear medicine",
     "skin cream", "nasal spray", "antidepressant", "antiviral", "cold", "cough",
-    "gastrincs", "headache", "infection", "inflammation",
+    "gastrics", "headache", "infection", "inflammation",
 
     # Common medical document sections
     "dosage", "usage", "side_effects", "warnings", "precautions",
     "interactions", "storage", "indications", "contraindications"
+]
+
+
+# -----------------------------
+# Section labels for structured metadata
+# -----------------------------
+SECTION_LABELS = [
+    "brand generic",
+    "composition",
+    "pharmacology",
+    "indications",
+    "dosage",
+    "usage",
+    "contraindications",
+    "warnings",
+    "side effects",
+    "interactions",
+    "overdose",
+    "storage",
+    "how supplied",
+    "other",
 ]
