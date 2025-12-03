@@ -32,7 +32,7 @@ EMBEDDER_MODELS = {
 }
 
 # --- Vector Store Config ---
-PINECONE_INDEX_NAME = "medembed-index"
+
 EMBEDDING_DIMENSIONS = {
     "default": 384,  # all-MiniLM-L6-v2 dimension
     "PubMedBert": 768, # PubMedBert dimension
@@ -46,6 +46,11 @@ OUTPUT_FILE = "data_cache/embedded_nodes_hybrid.jsonl"
 
 CHUNK_SIZE = 350
 OVERLAP = 30
+
+PINECONE_INDEX_NAME = "hybrid-index"
+PINECONE_CLOUD = "aws"
+PINECONE_REGION = "us-east-1"
+BATCH_SIZE = 100
 
 # --- RAG Config ---
 TOP_K_RESULTS = 8

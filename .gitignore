@@ -1,3 +1,7 @@
 .env
 
 /data/*.pdf
+
+_pycache__/
+
+model/_pycache__
