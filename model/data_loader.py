@@ -102,6 +102,17 @@ def prefix_source_in_text(nodes):
 # Step 3: Single LLM metadata extraction (filter_by + section)
 # -----------------------------
 def generate_metadata(llm: GoogleGenAI, text: str) -> dict:
+    # Show allowed values as proper JSON arrays to the model
+    filters_json = json.dumps(FILTERS, ensure_ascii=False)
+    sections_json = json.dumps(SECTION_LABELS, ensure_ascii=False)
+
+    # Build simple examples based on your config
+    example_filter_nonempty = FILTERS[:2] if len(FILTERS) >= 2 else FILTERS
+    example_section_nonempty = SECTION_LABELS[0] if SECTION_LABELS else "other"
+    example_section_other = "other" if "other" in SECTION_LABELS else (
+        SECTION_LABELS[0] if SECTION_LABELS else "other"
+    )
+
     prompt = (
         "You are a strict JSON generator for a medicine leaflet classification task.\n\n"
         "Given the following text, you must return ONLY a JSON object with this exact shape:\n"
@@ -109,32 +120,55 @@ def generate_metadata(llm: GoogleGenAI, text: str) -> dict:
         '  "filter_by": [...],\n'
         '  "section": "..." \n'
         "}\n\n"
-        "Rules:\n"
-        f"- 'filter_by' must be a JSON array of zero or more values from this allowed list: {FILTERS}\n"
-        f"- 'section' must be ONE string from this allowed list: {SECTION_LABELS}\n"
+        "Allowed values:\n"
+        f"- 'filter_by' values MUST be chosen only from this list: {filters_json}\n"
+        f"- 'section' MUST be one of: {sections_json}\n"
         "- If no filter_by category applies, use []\n"
-        "- If no section fits well, use 'other'\n\n"
-        "Respond with ONLY the JSON object, no extra text.\n\n"
+        "- If no section fits well, use \"other\".\n\n"
+        "Examples (these are just examples, not answers):\n\n"
+        "Example 1:\n"
+        "Text: \"Dosage for adults and children over 12 years...\"\n"
+        "Output:\n"
+        f"{{\n  \"filter_by\": {json.dumps(example_filter_nonempty)},\n"
+        f"  \"section\": {json.dumps(example_section_nonempty)}\n}}\n\n"
+        "Example 2:\n"
+        "Text: \"This leaflet contains general information about the medicine...\"\n"
+        "Output:\n"
+        f"{{\n  \"filter_by\": [],\n"
+        f"  \"section\": {json.dumps(example_section_other)}\n}}\n\n"
+        "Now analyze the following text and respond with ONLY the JSON object, "
+        "with no explanations, no extra keys, and no markdown code fences.\n\n"
         f"Text:\n{text}\n"
     )
 
     try:
         response = llm.complete(prompt)
-        raw = response.text
+        raw = response.text.strip()
+
+        # --- Handle ```json ... ``` wrappers if model ignores instructions ---
+        if raw.startswith("```"):
+            # Strip leading ``` or ```json
+            first_fence_end = raw.find("```", 3)
+            if first_fence_end != -1:
+                inner = raw[first_fence_end + 3 :]
+                second_fence = inner.rfind("```")
+                if second_fence != -1:
+                    raw = inner[:second_fence].strip()
+                else:
+                    raw = inner.strip()
 
         data = json.loads(raw)
 
-        # --- filter_by processing ---
+        # --- filter_by processing (keep only allowed values) ---
         fb = data.get("filter_by", [])
         if isinstance(fb, str):
             fb = [fb]
         if not isinstance(fb, list):
             fb = []
 
-        # keep only allowed filter values
         fb = [v for v in fb if v in FILTERS]
 
-        # --- section processing ---
+        # --- section processing (fallback to 'other') ---
         section = data.get("section", "other")
         if not isinstance(section, str) or section not in SECTION_LABELS:
             section = "other"
@@ -147,6 +181,7 @@ def generate_metadata(llm: GoogleGenAI, text: str) -> dict:
         "filter_by": fb,
         "section": section,
     }
+
 
 
 def enrich_metadata(nodes, llm: GoogleGenAI):

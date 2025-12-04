@@ -43,20 +43,25 @@ def add_splade_sparse_vectors(nodes):
 
 
 # -----------------------------
-# Step 5: Save nodes (pretty JSONL)
+# Step 5: Save nodes (JSONL)
 # -----------------------------
 def save_nodes_to_jsonl(nodes, output_file: str):
-    os.makedirs(os.path.dirname(output_file), exist_ok=True)
 
+    os.makedirs(os.path.dirname(output_file), exist_ok=True)
     with open(output_file, "w", encoding="utf-8") as f:
         for node in nodes:
+            metadata = dict(node.metadata or {})
+            metadata["text"] = node.text
+            sparse_values = getattr(node, "sparse_values", None) or metadata.get("sparse_values")
+            metadata.pop("sparse_values", None)
             record = {
                 "id": node.node_id,
-                "text": node.text,
-                "metadata": node.metadata,
                 "embedding": node.embedding,
-                # NEW: include SPLADE sparse vector if present
-                "sparse_values": node.metadata.get("sparse_values"),
+                "metadata": metadata,
             }
-            json.dump(record, f, ensure_ascii=False, indent=2)
-            f.write("\n\n")  # extra spacing for human visibility
+
+            if sparse_values is not None:
+                record["sparse_values"] = sparse_values
+            
+            json.dump(record, f, ensure_ascii=False)
+            f.write("\n")

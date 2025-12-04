@@ -36,10 +36,10 @@ def main():
     print("Adding filename prefix to chunks...")
     nodes = prefix_source_in_text(nodes)
 
-    print("Enriching metadata (filter_by + section) with a single LLM call per chunk...")
+    print("Enriching metadata...")
     nodes = enrich_metadata(nodes, llm)
 
-    print("Normalizing tags and adding doc_id/chunk_index/drug_name/keywords...")
+    print("Normalizing tags...")
     nodes = normalize_tags_and_index(nodes)
 
     print("Generating dense embeddings...")
