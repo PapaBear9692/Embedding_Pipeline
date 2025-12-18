@@ -14,8 +14,8 @@ from pinecone import Pinecone, ServerlessSpec
 ROOT_DIR = Path(__file__).resolve().parent
 ENV_PATH = ROOT_DIR / ".env"
 
-EMBED_MODEL_NAME = "pritamdeka/S-PubMedBert-MS-MARCO"
-GEMINI_MODEL_NAME = "models/gemini-2.5-flash"
+EMBED_MODEL_NAME = "abhinand/MedEmbed-base-v0.1"
+EMBEDDING_DIM = 768
 
 PINECONE_INDEX_NAME = "medicine-chatbot-sample-data-llama-v1"
 PINECONE_CLOUD = "aws"
@@ -45,11 +45,6 @@ def init_settings_and_storage():
         chunk_overlap=50,  # overlap between chunks for context continuity
     )
 
-    # Detect embedding dimension
-    dummy_embed = Settings.embed_model.get_text_embedding("hello world")
-    embedding_dim = len(dummy_embed)
-    print(f"Embedding dimension: {embedding_dim}")
-
     # Pinecone setup
     pc = Pinecone(api_key=pinecone_api_key)
 
@@ -61,8 +56,7 @@ def init_settings_and_storage():
         print(f"Creating Pinecone index '{PINECONE_INDEX_NAME}'...")
         pc.create_index(
             name=PINECONE_INDEX_NAME,
-            dimension=embedding_dim,
-            metric="cosine",
+            dimension=EMBEDDING_DIM,
             spec=ServerlessSpec(
                 cloud=PINECONE_CLOUD,
                 region=PINECONE_REGION,
