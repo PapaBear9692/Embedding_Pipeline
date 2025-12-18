@@ -1,9 +1,0 @@
-.env
-
-/data/*.pdf
-
-_pycache__/
-
-model/_pycache__
-data_cache/embedded_nodes_hybrid.jsonl
-data_cache/upsert_checkpoint.json
