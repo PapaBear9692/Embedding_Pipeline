@@ -1,13 +1,14 @@
 # dataloader.py
 import re
 from pathlib import Path
+from typing import Optional
 
 from llama_index.core import SimpleDirectoryReader
 
 
 # ---------- CONFIG ----------
 ROOT_DIR = Path(__file__).resolve().parent
-PDF_DIR = ROOT_DIR / "data" / "train data"
+
 
 
 # ---------- HELPERS ----------
@@ -37,8 +38,9 @@ def extract_usage(text: str) -> str:
 
 
 # ---------- DOCUMENT LOADER ----------
-def load_documents():
+def load_documents(job_dir:str):
     """Load PDFs with SimpleDirectoryReader and enrich metadata."""
+    PDF_DIR = ROOT_DIR / "data" / "train_data" / job_dir
     if not PDF_DIR.is_dir():
         raise FileNotFoundError(f"PDF_DIR does not exist: {PDF_DIR}")
 
