@@ -1,130 +1,111 @@
-# metadata_and_upsert_resumable_retry.py
 import json
-import time
+import shutil
+from typing import Optional, Tuple
 from pathlib import Path
-from model.llm_meta_generator import LLMMetaGenerator
-from model.storageModel import PineconeStorage
+from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
 
-# ---------- Helper: retry wrapper ----------
-def retry(func, retries=3, delay=5, backoff=2, exception_type=Exception):
-    """
-    Retry helper for transient errors.
-    """
-    for attempt in range(1, retries + 1):
-        try:
-            return func()
-        except exception_type as e:
-            print(f"[Retry {attempt}/{retries}] {func.__name__} failed: {e}")
-            if attempt < retries:
-                time.sleep(delay)
-                delay *= backoff
-            else:
-                print(f" Failed after {retries} retries.")
-                raise
 
-# ---------- Main pipeline ----------
-def generate_metadata_and_upsert(
-    input_path="data_cache/embedded_chunks.jsonl",
-    log_path="data_cache/uploaded_ids.json",
-    batch_size=50,
-    delay=10,
-    max_retries=3
-):
-    print("--- Starting Metadata Generation + Pinecone Upsert (Resumable + Retry) ---")
+from dataloader import load_documents
+from app_config import init_settings_and_storage
 
-    input_file = Path(input_path)
-    log_file = Path(log_path)
-    log_file.parent.mkdir(exist_ok=True)
 
-    # 1. Load uploaded IDs
-    uploaded_ids = set()
-    if log_file.exists():
-        with open(log_file, "r", encoding="utf-8") as f:
-            uploaded_ids = set(json.load(f))
-        print(f"Resuming from previous run — {len(uploaded_ids)} chunks already uploaded.")
+def update_list(storage_context, documents):
+    vector_store = storage_context.vector_store
+    pinecone_index = vector_store._pinecone_index
+    node_id = "7583456d-dab8-4059-84ae-d8aee29db643#46eb91e6-c227-4eb4-8a4b-469204fd8b28"
 
-    # 2. Load embedded chunks
-    if not input_file.exists():
-        print(f"Error: Input file '{input_path}' not found.")
+    # 1) collect product names from filenames (remove .pdf)
+    new_items = [
+        Path(d.metadata.get("file_name")).stem
+        for d in documents
+        if d.metadata.get("file_name")
+    ]
+    new_items = [x.strip() for x in new_items if x.strip()]
+    if not new_items:
         return
 
-    with open(input_file, "r", encoding="utf-8") as f:
-        records = [json.loads(line.strip()) for line in f if line.strip()]
+    # 2) fetch existing node
+    res = pinecone_index.fetch(
+        ids=[node_id],
+        namespace=vector_store.namespace,
+    )
+    if node_id not in res.vectors:
+        raise ValueError("Node ID not found in Pinecone")
 
-    print(f"Loaded {len(records)} embedded chunks.")
+    vec = res.vectors[node_id]
+    meta = getattr(vec, "metadata", None) or vec.get("metadata", {}) or {}
 
-    # 3. Initialize components
-    #meta_generator = LLMMetaGenerator()
-    storage = PineconeStorage()
-    storage.connect_to_index()
+    raw = meta.get("_node_content")
+    if not raw:
+        raise ValueError("Missing _node_content")
 
-    vectors_to_upsert, uploaded_now = [], []
+    # 3) parse node JSON
+    node_obj = json.loads(raw)
+    text = node_obj.get("text", "") or ""
 
-    # 4. Process each record
-    for i, record in enumerate(records, start=1):
-        if record["id"] in uploaded_ids:
-            continue
+    # 4) split existing comma-separated items
+    # normalize line breaks -> spaces, then split by comma
+    existing_items = [
+        x.strip()
+        for x in text.replace("\n", " ").split(",")
+        if x.strip()
+    ]
 
-        #print(f"[{i}/{len(records)}] Generating metadata...")
+    # 5) merge (case-insensitive, keep original order)
+    seen = {x.lower(): x for x in existing_items}
+    for item in new_items:
+        if item.lower() not in seen:
+            seen[item.lower()] = item
 
-        #Retry metadata generation
-        #def generate_meta():
-        #    return meta_generator.generate_metadata(record["text"])
+    merged_items = list(seen.values())
 
-        #try:
-        #    llm_metadata = retry(generate_meta, retries=max_retries, delay=5)
-        #except Exception as e:
-        #    print(f" Skipping chunk due to repeated LLM failure: {e}")
-        #    continue
+    # 6) rebuild text exactly as comma-separated
+    node_obj["text"] = ", ".join(merged_items)
 
-        raw_name = record.get("Drug Name", "unknown")
-        clean_name = raw_name.replace("_sup_", "").replace(".pdf", "")
+    # 7) write back
+    pinecone_index.update(
+        id=node_id,
+        set_metadata={
+            "_node_content": json.dumps(node_obj, ensure_ascii=False)
+        },
+        namespace=vector_store.namespace,
+    )
 
-        metadata = {
-            "text": record["text"],
-            "source": record.get("source", "unknown"),
-            "page": record.get("page", None),
-            "drug_name": clean_name,
-            #**llm_metadata,
-        }
 
-        vectors_to_upsert.append({
-            "id": record["id"],
-            "values": record["embedding"],
-            "metadata": metadata
-        })
-        uploaded_now.append(record["id"])
+def cleanup_train_data():
+    # CLEANUP: delete contents of train_data, keep folder
+    TRAIN_DATA_DIR = Path(__file__).resolve().parent / "data" / "train_data"
+    if TRAIN_DATA_DIR.exists() and TRAIN_DATA_DIR.is_dir():
+        for item in TRAIN_DATA_DIR.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item)
+            else:
+                item.unlink()
 
-        #print(f"  ↳ Topic: {llm_metadata.get('topic', 'N/A')}")
-        #time.sleep(delay)
 
-        # Batch upsert
-        if len(vectors_to_upsert) >= batch_size:
-            print(f" Upserting batch of {len(vectors_to_upsert)} vectors...")
-            try:
-                retry(lambda: storage.upsert_vectors(vectors_to_upsert), retries=max_retries, delay=5)
-                uploaded_ids.update(uploaded_now)
-                with open(log_file, "w", encoding="utf-8") as f:
-                    json.dump(list(uploaded_ids), f, indent=2)
-                vectors_to_upsert.clear()
-                uploaded_now.clear()
-            except Exception as e:
-                print(f" Batch upsert failed repeatedly: {e}")
+def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
 
-    # Final flush
-    if vectors_to_upsert:
-        print(f" Upserting final {len(vectors_to_upsert)} vectors...")
-        try:
-            retry(lambda: storage.upsert_vectors(vectors_to_upsert), retries=max_retries, delay=5)
-            uploaded_ids.update(uploaded_now)
-            with open(log_file, "w", encoding="utf-8") as f:
-                json.dump(list(uploaded_ids), f, indent=2)
-        except Exception as e:
-            print(f" Final upsert failed: {e}")
+    documents = load_documents()
+    if not documents:
+        return None
 
-    print(f" Completed. Total uploaded: {len(uploaded_ids)}")
-    print("--- Resumable + Retry Pipeline Finished ---")
+    storage_context = init_settings_and_storage()
+
+    index = VectorStoreIndex.from_documents(
+        documents,
+        storage_context=storage_context,
+        show_progress=True,
+    )
+
+    nodes = Settings.node_parser.get_nodes_from_documents(documents)
+    chunk_count = len(nodes)
+
+    update_list(storage_context, documents)
+    cleanup_train_data()
+
+    return index, chunk_count
 
 
 if __name__ == "__main__":
-    generate_metadata_and_upsert()
+    build_index()

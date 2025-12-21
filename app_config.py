@@ -1,49 +1,66 @@
 import os
+from pathlib import Path
+
 from dotenv import load_dotenv
+from llama_index.core import Settings, StorageContext
+from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 
-# Load environment variables from .env file
-load_dotenv()
+from llama_index.core.node_parser import SentenceSplitter
+from llama_index.vector_stores.pinecone import PineconeVectorStore
+from pinecone import Pinecone, ServerlessSpec
 
-# --- API Keys ---
-PINECONE_API_KEY = os.getenv("PINECONE_API_KEY")
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ROOT_DIR = Path(__file__).resolve().parent
+ENV_PATH = ROOT_DIR / ".env"
 
-# --- Model Selection ---
-# Change these values to swap models easily
+EMBED_MODEL_NAME = "abhinand/MedEmbed-base-v0.1"  # or -large
+EMBEDDING_DIM=768 
 
-# Supported: "gemini", "gpt"
-LLM_PROVIDER = "gemini"
+PINECONE_INDEX_NAME = "llama-medembed-index"
+PINECONE_CLOUD = "aws"
+PINECONE_REGION = "us-east-1"
+PINECONE_NAMESPACE = None 
 
-# Supported: "default" (all-miniLm-l6), "openai" (text-embedder-small), "PubMedBert" (NeuML/pubmedbert-base-embeddings)
-EMBEDDER_PROVIDER = "MedEmbed"
+def init_settings_and_storage():
+    load_dotenv(ENV_PATH)
 
-# --- Model Names ---
-LLM_MODELS = {
-    "gemini": "gemini-2.5-flash",
-    "gpt": "gpt-3.5-turbo"
-}
+    pinecone_api_key = os.getenv("PINECONE_API_KEY")
 
-EMBEDDER_MODELS = {
-    "default": "all-MiniLM-L6-v2",
-    "PubMedBert" : "NeuML/pubmedbert-base-embeddings",
-    "openai": "text-embedder-small",
-    "MedEmbed" : "abhinand/MedEmbed-base-v0.1"
-}
+    if not pinecone_api_key:
+        raise ValueError("Missing PINECONE_API_KEY in .env")
 
-# --- Vector Store Config ---
-PINECONE_INDEX_NAME = "medembed-index"
-EMBEDDING_DIMENSIONS = {
-    "default": 384,  # all-MiniLM-L6-v2 dimension
-    "PubMedBert": 768, # PubMedBert dimension
-    "openai": 1536,  # text-embedder-small dimension
-    "MedEmbed": 768  # MedEmbed dimension
-}
+    Settings.embed_model = HuggingFaceEmbedding(
+        model_name=EMBED_MODEL_NAME,
+        device="cpu",  # or "cuda"
+    )
 
-# --- Data Processing Config ---
-DATA_DIRECTORY = "data"
-CHUNK_SIZE = 1000
-CHUNK_OVERLAP = 100
+    Settings.node_parser = SentenceSplitter(
+        chunk_size=400,
+        chunk_overlap=30,
+    )
 
-# --- RAG Config ---
-TOP_K_RESULTS = 10
+    pc = Pinecone(api_key=pinecone_api_key)
+    existing_indexes = pc.list_indexes().names()
+
+    if PINECONE_INDEX_NAME not in existing_indexes:
+        print(f"Creating Pinecone index '{PINECONE_INDEX_NAME}'...")
+        pc.create_index(
+            name=PINECONE_INDEX_NAME,
+            dimension=EMBEDDING_DIM,
+            metric="cosine",
+            spec=ServerlessSpec(
+                cloud=PINECONE_CLOUD,
+                region=PINECONE_REGION,
+            ),
+        )
+    else:
+        print(f"Using existing Pinecone index '{PINECONE_INDEX_NAME}'")
+
+    pinecone_index = pc.Index(PINECONE_INDEX_NAME)
+
+    vector_store = PineconeVectorStore(
+        pinecone_index=pinecone_index,
+        namespace=PINECONE_NAMESPACE,
+    )
+
+    storage_context = StorageContext.from_defaults(vector_store=vector_store)
+    return storage_context

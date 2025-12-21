@@ -1,0 +1,68 @@
+/* =========================
+   media.css
+   Only responsive rules here
+   ========================= */
+
+/* Very small phones */
+@media (max-width: 360px){
+  html{ font-size: 15px; }
+
+  .brand-logo-wrap{ width:40px; height:40px; border-radius:12px; }
+  .brand-logo{ width:28px; height:28px; }
+
+  .ai-title{ font-size: 1rem; }
+  .ai-subtitle{ font-size: .85rem; }
+
+  .ai-drop-icon{ width:56px; height:56px; font-size: 1.6rem; }
+
+  .ai-filelist{ max-height: 200px; overflow:auto; }
+  .ai-chat{ max-height: 180px; overflow:auto; }
+  .ai-console{ max-height: 240px; overflow:auto; }
+}
+
+/* Phones */
+@media (max-width: 576px){
+  html{ font-size: 15.5px; }
+
+  .ai-card{ border-radius: 16px; }
+  .ai-metric{ border-radius: 14px; }
+  .ai-console{ border-radius: 14px; }
+  .ai-replies{ border-radius: 16px; }
+
+  .ai-dropzone{ border-radius: 16px; }
+  .ai-file{ border-radius: 12px; }
+
+  .ai-btn-brand,
+  .ai-btn-outline-pill{
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* Tablets */
+@media (max-width: 992px){
+  .ai-filelist{ max-height: 240px; }
+  .ai-chat{ max-height: 200px; }
+  .ai-console{ max-height: 240px; }
+}
+
+/* Header/footer tweaks to match chatbot on small screens */
+@media (max-width: 480px){
+  .header{ height: 70px; }
+  .header-content{ padding: 0 10px; }
+  .brand-logo{ height: auto; width: 125px; }
+  .second-logo{ display: none; }
+  .app-title{ font-size: .95rem; }
+  .app-subtitle{ font-size: .72rem; }
+  .page-body{ padding: 12px 10px 8px; }
+}
+
+@media (max-width: 320px){
+  .header{ height: 70px; }
+  .header-content{ padding: 0 10px; }
+  .brand-logo{ height: auto; width: 80px; }
+  .second-logo{ display: none; }
+  .app-title{ font-size: .95rem; }
+  .app-subtitle{ font-size: .72rem; }
+  .page-body{ padding: 12px 10px 8px; }
+}

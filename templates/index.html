@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI PDF Ingestion • Medicine Assistant</title>
+
+  <!-- Bootstrap 5.3.8 -->
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+    crossorigin="anonymous"
+  >
+  <!-- Bootstrap Icons -->
+  <link
+    rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
+  >
+
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/media.css') }}" />
+
+</head>
+
+<body class="ai-bg ai-bg-white">
+  <!-- Subtle background particles -->
+  <canvas id="aiParticles" class="ai-particles" aria-hidden="true"></canvas>
+
+  <div class="container py-0 position-relative">
+    <!-- Header (chatbot-like) -->
+    <header class="header">
+      <div class="header-content">
+
+        <div class="brand-group">
+          <a href="https://www.squarepharma.com.bd/" class="brand-link" target="_blank" rel="noopener">
+            <img src="{{ url_for('static', filename='img/logo1.png') }}" alt="Square Pharmaceuticals PLC." class="brand-logo">
+          </a>
+
+          <div class="title-block">
+            <h1 class="app-title">Chatbot Training Interface</h1>
+            <!-- <p class="app-subtitle">PDF Ingestion Console</p> -->
+          </div>
+        </div>
+
+        <div class="header-right">
+          <img src="{{ url_for('static', filename='img/logo2.png') }}" alt="Square Group" class="second-logo">
+
+          <a href="https://verify.squarepharma.com.bd/chat/" class="btn btn-sm ai-btn-outline-pill">
+            <i class="bi bi-chat-dots"></i>
+            <span class="d-none d-sm-inline">Back to Chat</span>
+          </a>
+        </div>
+
+      </div>
+    </header>
+
+    <!-- Page body -->
+    <main class="page-body">
+      <div class="row g-3 g-lg-4">
+        <!-- Upload -->
+        <div class="col-12 col-lg-7">
+          <div class="card ai-card h-100">
+            <div class="card-body p-3 p-md-4">
+              <div class="d-flex align-items-start justify-content-between gap-3 mb-2">
+                <div>
+                  <h2 class="h4 mb-1 fw-bold">Upload Training PDFs</h2>
+                  <p class="mb-0 ai-muted">
+                    Drop medicine leaflet PDFs. Server will chunk, embed and store vectors.
+                  </p>
+                </div>
+              </div>
+
+              <!-- tabindex + role for keyboard accessibility -->
+              <div id="dropzone" class="ai-dropzone mt-3 mt-md-4" tabindex="0" role="button" aria-label="Upload PDFs (drag and drop or press Enter)">
+                <div class="text-center py-4 px-3">
+                  <div class="ai-drop-icon mb-3">
+                    <i class="bi bi-cloud-arrow-up"></i>
+                  </div>
+                  <div class="fw-bold fs-5">Drag & Drop PDFs</div>
+                  <div class="ai-muted">or click to browse (multiple supported)</div>
+
+                  <input id="fileInput" class="ai-file-input" type="file" accept="application/pdf" multiple>
+                </div>
+              </div>
+
+              <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
+                <button id="uploadBtn" class="btn ai-btn-brand" type="button">
+                  <i class="bi bi-stars"></i> Upload & Embed
+                </button>
+
+                <button id="clearBtn" class="btn ai-btn-outline-pill" type="button">
+                  <i class="bi bi-x-circle"></i> Clear
+                </button>
+
+                <div class="ms-0 ms-md-auto small ai-muted">
+                  Endpoint:
+                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/ingest</code>
+                </div>
+              </div>
+
+              <hr class="ai-hr my-3 my-md-4">
+
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="fw-semibold">Selected Files</div>
+                <span class="badge rounded-pill ai-badge" id="fileCount">0</span>
+              </div>
+
+              <div id="fileList" class="ai-filelist"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Status -->
+        <div class="col-12 col-lg-5">
+          <div class="card ai-card h-100">
+            <div class="card-body p-3 p-md-4">
+              <div class="d-flex align-items-start justify-content-between mb-3">
+                <div>
+                  <h2 class="h5 fw-bold mb-1">Training Status</h2>
+                  <div class="ai-muted small">Progress + backend logs.</div>
+                </div>
+                <span class="ai-dot" id="statusDot" aria-hidden="true"></span>
+              </div>
+
+              <div class="mb-2 fw-semibold" id="statusText">Idle. Awaiting PDFs…</div>
+
+              <div class="progress ai-progress mb-2" role="progressbar" aria-label="progress">
+                <div id="progressBar" class="progress-bar ai-progressbar" style="width: 0%"></div>
+              </div>
+
+              <div class="d-flex justify-content-between small ai-muted mb-3 mb-md-4">
+                <span id="phaseText">Ready</span>
+                <span id="progressPct">0%</span>
+              </div>
+
+              <div class="row g-2 mb-3 mb-md-4">
+                <div class="col-4">
+                  <div class="ai-metric">
+                    <div class="ai-metric-k">Files</div>
+                    <div class="ai-metric-v" id="mFiles">0</div>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="ai-metric">
+                    <div class="ai-metric-k">Chunks</div>
+                    <div class="ai-metric-v" id="mChunks">0</div>
+                  </div>
+                </div>
+                <div class="col-4">
+                  <div class="ai-metric">
+                    <div class="ai-metric-k">Skipped</div>
+                    <div class="ai-metric-v" id="mSkipped">0</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="ai-replies mb-3">
+                <div class="d-flex align-items-center justify-content-between mb-2">
+                  <div class="fw-semibold">AI Operator</div>
+                  <span class="badge rounded-pill ai-badge-soft" id="aiMood">online</span>
+                </div>
+                <div id="aiChat" class="ai-chat"></div>
+              </div>
+
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <div class="fw-semibold">Console</div>
+                <button id="copyLogBtn" class="btn btn-sm ai-btn-outline-pill" type="button">
+                  <i class="bi bi-clipboard"></i> Copy
+                </button>
+              </div>
+
+              <pre id="consoleLog" class="ai-console">[system] Ready.</pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Footer (chatbot-like) -->
+    <footer class="chat-footer">
+      <p>© 2025 <a href="https://www.squarepharma.com.bd" target="_blank" rel="noopener">Square Pharmaceuticals PLC.</a> All rights reserved.</p>
+    </footer>
+  </div>
+
+  <!-- Bootstrap bundle -->
+  <script
+    src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+    integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+    crossorigin="anonymous"
+  ></script>
+
+  <!-- Custom JS -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+</html>
