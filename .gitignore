@@ -9,3 +9,5 @@ embedenv
 /embedenv
 
 /embedenv/*
+__pycache__/app_config.cpython-311.pyc
+__pycache__/app_config.cpython-311.pyc

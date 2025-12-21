@@ -2,7 +2,6 @@ import os
 from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
-
 from upsert import build_index  # calls your existing pipeline
 
 ROOT_DIR = Path(__file__).resolve().parent
