@@ -1,110 +1,76 @@
-# app.py
 import os
-import uuid
-import shutil
 from pathlib import Path
-
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
-import upsert
+from upsert import build_index  # calls your existing pipeline
 
-app = Flask(__name__)
+ROOT_DIR = Path(__file__).resolve().parent
+UPLOAD_DIR = ROOT_DIR / "data" / "train_data"
 
-BASE_DIR = Path(__file__).resolve().parent
-TRAIN_ROOT = BASE_DIR / "data" / "train_data"
-TRAIN_ROOT.mkdir(parents=True, exist_ok=True)
-
-ALLOWED_EXTENSIONS = {"pdf"}
-app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024  # 100MB
-
+ALLOWED_EXTENSIONS = {".pdf"}
 
 def allowed_file(filename: str) -> bool:
-    return "." in filename and filename.rsplit(".", 1)[1].lower() in ALLOWED_EXTENSIONS
+    ext = Path(filename).suffix.lower()
+    return ext in ALLOWED_EXTENSIONS
 
+def create_app():
+    app = Flask(__name__)
 
-@app.get("/health")
-def health():
-    return jsonify({"status": "ok"})
+    # Optional: limit upload size (e.g., 50MB total request)
+    app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
 
+    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
-# app.py (fixed parts)
+    @app.get("/")
+    def home():
+        return render_template("index.html")
 
-@app.post("/upload")
-def upload():
-    if "files" not in request.files:
-        return jsonify({"status": "error", "message": "Use multipart key 'files'"}), 400
+    @app.post("/api/ingest")
+    def ingest():
+        # Frontend sends "files" (multiple)
+        if "files" not in request.files:
+            return jsonify({"error": "No files field in form-data (expected key: files)"}), 400
 
-    files = request.files.getlist("files")
-    if not files:
-        return jsonify({"status": "error", "message": "No files uploaded"}), 400
+        files = request.files.getlist("files")
+        if not files:
+            return jsonify({"error": "No files received"}), 400
 
-    job_id = uuid.uuid4().hex
+        saved = 0
+        skipped = 0
+        for f in files:
+            if not f or not f.filename:
+                skipped += 1
+                continue
 
-    
-    job_dir = TRAIN_ROOT / job_id
-    job_dir.mkdir(parents=True, exist_ok=True)
+            filename = secure_filename(f.filename)
+            if not filename:
+                skipped += 1
+                continue
 
-    saved, rejected = [], []
-    for f in files:
-        if not f or not f.filename:
-            continue
+            if not allowed_file(filename):
+                skipped += 1
+                continue
 
-        filename = secure_filename(f.filename)
-        if not allowed_file(filename):
-            rejected.append({"file": f.filename, "reason": "Only PDF allowed"})
-            continue
+            out_path = UPLOAD_DIR / filename
+            f.save(out_path)
+            saved += 1
 
-        dst = job_dir / filename
+        if saved == 0:
+            return jsonify({"error": "No valid PDF files to ingest", "files": 0, "chunks": 0, "skipped": skipped}), 400
 
-        # avoid overwrite inside same job
-        if dst.exists():
-            stem, suffix = dst.stem, dst.suffix
-            i = 1
-            while True:
-                candidate = job_dir / f"{stem}_{i}{suffix}"
-                if not candidate.exists():
-                    dst = candidate
-                    break
-                i += 1
+        
+        try:
+            build_index()
+        except Exception as e:
+            # If indexing fails, do NOT hide the error from frontend
+            return jsonify({"error": str(e), "files": saved, "chunks": 0, "skipped": skipped}), 500
 
-        f.save(dst)
-        saved.append(str(dst))
+        # Your frontend reads these metrics. We can return chunks=0 unless you add counting (see section 3).
+        return jsonify({"files": saved, "chunks": 0, "skipped": skipped})
 
-    return jsonify({"status": "ok", "job_id": job_id, "saved": saved, "rejected": rejected})
-
-
-@app.post("/upsert/<job_id>")
-def run_upsert(job_id: str):
-    
-    job_dir = TRAIN_ROOT / str(job_id)
-
-    if not job_dir.exists() or not job_dir.is_dir():
-        return jsonify({"status": "error", "message": "Invalid job_id"}), 404
-
-    pdfs = list(job_dir.glob("*.pdf"))
-    if not pdfs:
-        return jsonify({"status": "error", "message": "No PDFs found for this job"}), 400
-
-    try:
-        # This matches your dataloader.py expectation (job_dir is the folder name)
-        result = upsert.build_index(str(job_id))
-
-        shutil.rmtree(job_dir)
-
-        return jsonify({
-            "status": "ok",
-            "message": "Upsert completed",
-            "job_id": job_id,
-            "pdf_count": len(pdfs),
-            "result_type": type(result).__name__ if result is not None else None
-        })
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e), "job_id": job_id}), 500
-
-
+    return app
 
 if __name__ == "__main__":
-    port = int(os.getenv("PORT", "5000"))
-    app.run(host="0.0.0.0", port=port, debug=False)
+    app = create_app()
+    app.run(host="127.0.0.1", port=5000, debug=True)

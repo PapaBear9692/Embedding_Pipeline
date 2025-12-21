@@ -18,13 +18,14 @@
     href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"
   >
 
-  <!-- Your ingestion page styles -->
-  <link rel="stylesheet" href="css/style.css" />
-  <link rel="stylesheet" href="css/media.css" />
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/media.css') }}" />
+
 </head>
 
 <body class="ai-bg ai-bg-white">
-  <!-- (Optional) keep canvas; we’ll make it super subtle on white via CSS -->
+  <!-- Subtle background particles -->
   <canvas id="aiParticles" class="ai-particles" aria-hidden="true"></canvas>
 
   <div class="container py-0 position-relative">
@@ -34,18 +35,17 @@
 
         <div class="brand-group">
           <a href="https://www.squarepharma.com.bd/" class="brand-link" target="_blank" rel="noopener">
-            <!-- Use your ingestion logo or your chatbot’s brand logo -->
-            <img src="img/logo1.png" alt="Square Pharmaceuticals PLC." class="brand-logo">
+            <img src="{{ url_for('static', filename='img/logo1.png') }}" alt="Square Pharmaceuticals PLC." class="brand-logo">
           </a>
 
           <div class="title-block">
             <h1 class="app-title">Medicine Chatbot</h1>
-            <p class="app-subtitle">PDF Ingestion Console</p>
+            <!-- <p class="app-subtitle">PDF Ingestion Console</p> -->
           </div>
         </div>
 
         <div class="header-right">
-          <img src="img/logo2.png" alt="Square Group" class="second-logo">
+          <img src="{{ url_for('static', filename='img/logo2.png') }}" alt="Square Group" class="second-logo">
 
           <a href="#" class="btn btn-sm ai-btn-outline-pill">
             <i class="bi bi-chat-dots"></i>
@@ -66,19 +66,20 @@
               <div class="d-flex align-items-start justify-content-between gap-3 mb-2">
                 <div>
                   <h2 class="h4 mb-1 fw-bold">Upload PDFs</h2>
-                  <p class="mb-0 text-white-50">
+                  <p class="mb-0 ai-muted">
                     Drop medicine leaflet PDFs. Server will chunk, embed and store vectors.
                   </p>
                 </div>
               </div>
 
-              <div id="dropzone" class="ai-dropzone mt-3 mt-md-4">
+              <!-- tabindex + role for keyboard accessibility -->
+              <div id="dropzone" class="ai-dropzone mt-3 mt-md-4" tabindex="0" role="button" aria-label="Upload PDFs (drag and drop or press Enter)">
                 <div class="text-center py-4 px-3">
                   <div class="ai-drop-icon mb-3">
                     <i class="bi bi-cloud-arrow-up"></i>
                   </div>
                   <div class="fw-bold fs-5">Drag & Drop PDFs</div>
-                  <div class="text-white-50">or click to browse (multiple supported)</div>
+                  <div class="ai-muted">or click to browse (multiple supported)</div>
 
                   <input id="fileInput" class="ai-file-input" type="file" accept="application/pdf" multiple>
                 </div>
@@ -93,7 +94,7 @@
                   <i class="bi bi-x-circle"></i> Clear
                 </button>
 
-                <div class="ms-0 ms-md-auto small text-white-50">
+                <div class="ms-0 ms-md-auto small ai-muted">
                   Endpoint:
                   <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/ingest</code>
                 </div>
@@ -118,7 +119,7 @@
               <div class="d-flex align-items-start justify-content-between mb-3">
                 <div>
                   <h2 class="h5 fw-bold mb-1">Ingestion Status</h2>
-                  <div class="text-white-50 small">Progress + backend logs.</div>
+                  <div class="ai-muted small">Progress + backend logs.</div>
                 </div>
                 <span class="ai-dot" id="statusDot" aria-hidden="true"></span>
               </div>
@@ -129,7 +130,7 @@
                 <div id="progressBar" class="progress-bar ai-progressbar" style="width: 0%"></div>
               </div>
 
-              <div class="d-flex justify-content-between small text-white-50 mb-3 mb-md-4">
+              <div class="d-flex justify-content-between small ai-muted mb-3 mb-md-4">
                 <span id="phaseText">Ready</span>
                 <span id="progressPct">0%</span>
               </div>
@@ -190,6 +191,7 @@
     crossorigin="anonymous"
   ></script>
 
-  <script src="js/main.js"></script>
+  <!-- Custom JS -->
+  <script src="{{ url_for('static', filename='js/main.js') }}"></script>
 </body>
 </html>

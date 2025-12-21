@@ -32,9 +32,7 @@
   .ai-dropzone{ border-radius: 16px; }
   .ai-file{ border-radius: 12px; }
 
-  .ai-btn-neon,
   .ai-btn-brand,
-  .ai-btn-outline,
   .ai-btn-outline-pill{
     width: 100%;
     justify-content: center;

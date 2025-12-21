@@ -8,56 +8,52 @@
  * 4) Shows progress + console log updates
  * 5) Shows AI operator messages with typing effect
  * 6) Runs a simple particle animation in the background
- *
- * IMPORTANT NOTE:
- * Your CSS is the "source of truth" for class names.
- * This JS must use the SAME class names that style.css expects.
  *******************************************************/
 
 /* =========================
    1) BACKEND CONFIG
    ========================= */
 
-// If your frontend and backend are on the same domain,
-// you can keep API_BASE as an empty string.
 const API_BASE = "";
-
-// Backend endpoint that receives PDFs
 const INGEST_ENDPOINT = `${API_BASE}/api/ingest`;
 
 /* =========================
    2) TYPEWRITER SPEED CONTROL
+   (kept, but no longer used directly for char-by-char)
    ========================= */
 
-// Base delay range (ms) per character for typewriter effect
 const TYPE_BASE_MIN = 6;
 const TYPE_BASE_MAX = 18;
-
-// Pause slightly longer after punctuation
 const TYPE_PUNCTUATION_BONUS = 60;
 
 /* =========================
    3) ELEMENT REFERENCES
    ========================= */
 
-// Helper: safely get an element (returns null if missing)
 const $ = (sel) => document.querySelector(sel);
 
-// Top bar / header pieces
-const statusDot   = $(".ai-dot");
+// Top status area
+const statusDot   = $("#statusDot"); // align with HTML id
 const statusText  = $("#statusText");
 const phaseText   = $("#phaseText");
 const progressBar = $("#progressBar");
 const progressPct = $("#progressPct");
 
+// Metrics
+const mFiles   = $("#mFiles");
+const mChunks  = $("#mChunks");
+const mSkipped = $("#mSkipped");
+
 // File selection area
 const dropzone   = $("#dropzone");
 const fileInput  = $("#fileInput");
 const fileList   = $("#fileList");
+const fileCount  = $("#fileCount");
 
 // Buttons
 const uploadBtn  = $("#uploadBtn");
 const clearBtn   = $("#clearBtn");
+const copyLogBtn = $("#copyLogBtn");
 
 // Console log area
 const consoleLog = $("#consoleLog");
@@ -70,7 +66,6 @@ const aiMood = $("#aiMood");
    4) APP STATE
    ========================= */
 
-// Where we store selected files before upload
 let selectedFiles = [];
 
 /* =========================
@@ -90,7 +85,6 @@ function bytesToSize(bytes) {
   const sizes = ["B", "KB", "MB", "GB"];
   let i = 0;
   let n = bytes;
-
   while (n >= 1024 && i < sizes.length - 1) {
     n /= 1024;
     i++;
@@ -107,23 +101,19 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
+function clampInt(n, min, max) {
+  const x = Number(n);
+  if (!Number.isFinite(x)) return min;
+  return Math.max(min, Math.min(max, Math.trunc(x)));
+}
+
 /* =========================
    6) UI HELPERS
    ========================= */
 
 function setDot(mode) {
-  // The tiny status dot in the top bar.
-  // Your CSS supports two "states":
-  //   - .ai-dot.online  (green)
-  //   - .ai-dot.error   (red)
-  //
-  // So we only ever add/remove those class names here.
   if (!statusDot) return;
-
-  // Remove any previous state classes first
   statusDot.classList.remove("online", "error");
-
-  // Add the requested state (if any)
   if (mode) statusDot.classList.add(mode);
 }
 
@@ -139,9 +129,13 @@ function setPhase(label) {
 
 function setStatus(text, dotMode) {
   if (statusText) statusText.textContent = text;
-
-  // dotMode should be "online" or "error" (or empty string)
   setDot(dotMode || "");
+}
+
+function setMetrics({ files = 0, chunks = 0, skipped = 0 } = {}) {
+  if (mFiles) mFiles.textContent = String(clampInt(files, 0, 1_000_000));
+  if (mChunks) mChunks.textContent = String(clampInt(chunks, 0, 9_999_999));
+  if (mSkipped) mSkipped.textContent = String(clampInt(skipped, 0, 9_999_999));
 }
 
 function log(line) {
@@ -156,54 +150,129 @@ function clearLog() {
   consoleLog.textContent = "[system] Ready.";
 }
 
+function setFileCount(n) {
+  if (!fileCount) return;
+  fileCount.textContent = String(clampInt(n, 0, 1_000_000));
+}
+
 /* =========================
    7) CHAT UI (AI OPERATOR)
    ========================= */
 
 function aiAppendBubble(text, type = "ai") {
   if (!aiChat) return null;
-
   const wrap = document.createElement("div");
   wrap.className = `ai-msg ${type}`;
-
-  wrap.innerHTML = `
-    <div class="ai-bubble">${escapeHtml(text)}</div>
-  `;
-
+  wrap.innerHTML = `<div class="ai-bubble">${escapeHtml(text)}</div>`;
   aiChat.appendChild(wrap);
   aiChat.scrollTop = aiChat.scrollHeight;
   return wrap;
 }
 
+/**
+ * B) Minimal formatting (very light markdown-ish):
+ * - **bold**
+ * - `inline code`
+ * - bullet lists starting with "-" or "•"
+ * - paragraphs based on newlines
+ *
+ * Returns innerHTML to be placed INSIDE <div class="fmt">...</div>
+ */
+function formatLite(input) {
+  const esc = escapeHtml(String(input));
+
+  // inline code
+  let s = esc.replace(/`([^`]+)`/g, "<code>$1</code>");
+  // bold
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+
+  const lines = s.split(/\r?\n/);
+  let html = "";
+  let inList = false;
+
+  const closeList = () => {
+    if (inList) {
+      html += "</ul>";
+      inList = false;
+    }
+  };
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    const isBullet = /^[-•]\s+/.test(trimmed);
+    if (isBullet) {
+      if (!inList) {
+        closeList();
+        html += "<ul>";
+        inList = true;
+      }
+      html += `<li>${trimmed.replace(/^[-•]\s+/, "")}</li>`;
+      continue;
+    }
+
+    closeList();
+
+    if (trimmed === "") {
+      html += "<p></p>";
+    } else {
+      html += `<p>${line}</p>`;
+    }
+  }
+
+  closeList();
+  return html;
+}
+
+/**
+ * B) Replace char-by-char typewriter with ChatGPT-like "streaming"
+ * - streams by words/spaces
+ * - re-renders every few tokens
+ * - adds natural pauses on punctuation/newlines
+ *
+ * (Function name kept SAME for minimal changes elsewhere.)
+ */
 async function typewriterToBubble(el, text) {
   if (!el) return;
   const bubble = el.querySelector(".ai-bubble");
   if (!bubble) return;
 
-  const safe = escapeHtml(text);
-  bubble.textContent = "";
+  // Create a formatting container (styled in CSS)
+  bubble.innerHTML = `<div class="fmt"></div>`;
+  const holder = bubble.querySelector(".fmt");
+  if (!holder) return;
 
-  for (let i = 0; i < safe.length; i++) {
-    bubble.textContent += safe[i];
+  const tokens = String(text).split(/(\s+)/); // keep spaces
+  let out = "";
 
-    // Random jitter makes typing feel more human
-    const jitter = TYPE_BASE_MIN + Math.random() * (TYPE_BASE_MAX - TYPE_BASE_MIN);
+  for (let i = 0; i < tokens.length; i++) {
+    out += tokens[i];
 
-    // Add a little extra pause after punctuation
-    const ch = safe[i];
-    const bonus = /[.!?]/.test(ch) ? TYPE_PUNCTUATION_BONUS : 0;
+    // update UI every few tokens (smoother + faster)
+    if (i % 4 === 0 || i === tokens.length - 1) {
+      holder.innerHTML = formatLite(out);
+      aiChat.scrollTop = aiChat.scrollHeight;
+    }
 
-    await sleep(jitter + bonus);
+    const last = tokens[i] || "";
+    const base = 18 + Math.random() * 40;
+    const punct = /[.!?]\s*$/.test(last) ? 120 : 0;
+    const nl = /\n/.test(last) ? 160 : 0;
+
+    await sleep(base + punct + nl);
   }
 
   aiChat.scrollTop = aiChat.scrollHeight;
 }
 
+/**
+ * C) Typing indicator kept as-is (minimal change)
+ */
 function aiTypingBubble(show) {
   if (!aiChat) return null;
 
-  // If there is already a typing bubble, remove it first
-  const existing = aiChat.querySelector(".ai-typing");
+  // remove existing typing bubble if present
+  const existing = aiChat.querySelector(".ai-msg.ai-typing");
   if (existing) existing.remove();
 
   if (!show) return null;
@@ -211,9 +280,10 @@ function aiTypingBubble(show) {
   const wrap = document.createElement("div");
   wrap.className = "ai-msg ai ai-typing";
 
+  // Use .ai-typing-dots to match CSS
   wrap.innerHTML = `
     <div class="ai-bubble">
-      <span class="ai-typing-dots">
+      <span class="ai-typing-dots" aria-label="AI is typing">
         <span></span><span></span><span></span>
       </span>
     </div>
@@ -231,7 +301,6 @@ function aiTypingBubble(show) {
 function addFiles(fileListLike) {
   if (!fileListLike) return;
 
-  // Convert FileList to a normal array and filter PDFs only
   const incoming = Array.from(fileListLike).filter((f) => {
     const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
     return isPdf;
@@ -242,10 +311,7 @@ function addFiles(fileListLike) {
     return;
   }
 
-  // Add to our state
   selectedFiles = selectedFiles.concat(incoming);
-
-  // Re-render file list UI
   renderFileList();
 }
 
@@ -255,7 +321,8 @@ function renderFileList() {
   fileList.innerHTML = "";
 
   if (!selectedFiles.length) {
-    fileList.innerHTML = `<div class="text-muted small">No files selected.</div>`;
+    fileList.innerHTML = `<div class="ai-muted small">No files selected.</div>`;
+    setFileCount(0);
     return;
   }
 
@@ -263,9 +330,6 @@ function renderFileList() {
     const row = document.createElement("div");
     row.className = "ai-file";
 
-    // Build one "file row" using the same class names defined in style.css.
-    // This is important: if the class names don't match, the row will work
-    // but it won't look the way you designed it.
     row.innerHTML = `
       <div class="d-flex flex-column">
         <div class="ai-file-name">${escapeHtml(f.name)}</div>
@@ -279,13 +343,12 @@ function renderFileList() {
     fileList.appendChild(row);
   });
 
-  // Attach click handlers to remove buttons
+  setFileCount(selectedFiles.length);
+
   fileList.querySelectorAll("button.ai-file-x").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.dataset.idx);
       if (!Number.isFinite(i)) return;
-
-      // Remove from state and re-render UI
       selectedFiles.splice(i, 1);
       renderFileList();
     });
@@ -302,27 +365,22 @@ async function uploadAndIngest() {
     return;
   }
 
-  // Lock UI during upload
   uploadBtn?.setAttribute("disabled", "true");
   clearBtn?.setAttribute("disabled", "true");
   fileInput?.setAttribute("disabled", "true");
+  dropzone?.setAttribute("aria-disabled", "true");
 
-  // Show “busy” mood
   if (aiMood) aiMood.textContent = "processing";
 
-  // Status dot should be GREEN while working (CSS: .ai-dot.online)
   setStatus("Uploading PDFs…", "online");
   setPhase("Upload");
   setProgress(5);
   log("Starting ingestion request...");
 
-  const typing = aiTypingBubble(true);
+  aiTypingBubble(true);
 
   try {
     const formData = new FormData();
-
-    // Backend expects "files" (common pattern). If your backend expects a different key,
-    // change "files" below.
     selectedFiles.forEach((f) => formData.append("files", f, f.name));
 
     setProgress(20);
@@ -336,48 +394,42 @@ async function uploadAndIngest() {
     setProgress(60);
 
     if (!res.ok) {
-      // If server gives JSON error, try to read it; otherwise show plain status
       let errText = `HTTP ${res.status}`;
       try {
         const data = await res.json();
         errText = data?.error || data?.message || errText;
-      } catch (_) {
-        // ignore JSON parse errors
-      }
+      } catch (_) {}
       throw new Error(errText);
     }
 
     const data = await res.json().catch(() => ({}));
-
     setProgress(95);
 
-    // Success state
+    // Try to read metrics if backend returns them; fall back sanely.
+    const files = Number.isFinite(Number(data?.files)) ? Number(data.files) : selectedFiles.length;
+    const chunks = Number.isFinite(Number(data?.chunks)) ? Number(data.chunks) : 0;
+    const skipped = Number.isFinite(Number(data?.skipped)) ? Number(data.skipped) : 0;
+
+    setMetrics({ files, chunks, skipped });
+
     setStatus("Ingestion complete.", "online");
     setPhase("Complete");
     log("Ingestion complete.");
+    log(`Metrics: files=${files}, chunks=${chunks}, skipped=${skipped}`);
 
-    // Optional metrics (if backend returns them)
-    const files = data?.files ?? selectedFiles.length;
-    const chunks = data?.chunks ?? "unknown";
-    const seconds = data?.seconds ?? "unknown";
-    log(`Metrics: files=${files}, chunks=${chunks}, seconds=${seconds}`);
-
-    // Replace typing indicator with a typewritten reply
     aiTypingBubble(false);
     const bubble = aiAppendBubble("", "ai");
     await typewriterToBubble(
       bubble,
-      `Ingestion successful ✅\nProcessed ${files} file(s). Ready for your next upload.`
+      `**Ingestion successful ✅**\n- Processed **${files}** file(s)\n- Ready for your next upload`
     );
 
-    // Clear file state after successful ingestion
     selectedFiles = [];
     renderFileList();
     setProgress(100);
   } catch (err) {
     aiTypingBubble(false);
 
-    // Error state: RED dot (CSS: .ai-dot.error)
     setStatus("Error during ingestion.", "error");
     setPhase("Failed");
     setProgress(0);
@@ -386,15 +438,14 @@ async function uploadAndIngest() {
     const bubble = aiAppendBubble("", "ai");
     await typewriterToBubble(
       bubble,
-      `I hit an error talking to the server.\nReason: ${String(err?.message || err)}\nCheck the console log and try again.`
+      `I hit an error talking to the server.\n\n**Reason:** \`${String(err?.message || err)}\`\n\nCheck the console log and try again.`
     );
   } finally {
-    // Re-enable UI no matter what happened
     uploadBtn?.removeAttribute("disabled");
     clearBtn?.removeAttribute("disabled");
     fileInput?.removeAttribute("disabled");
+    dropzone?.removeAttribute("aria-disabled");
 
-    // Back to “online”
     if (aiMood) aiMood.textContent = "online";
   }
 }
@@ -405,22 +456,26 @@ async function uploadAndIngest() {
 
 function bindEvents() {
   if (dropzone) {
-    // Clicking the dropzone opens the file picker
+    // Click opens file picker
     dropzone.addEventListener("click", () => fileInput?.click());
 
-    // When the user drags files over the drop area, prevent the browser from opening the file
-    // and add the "dragover" class so CSS can highlight the dropzone.
-    dropzone.addEventListener("dragover", (e) => {
-      e.preventDefault(); // IMPORTANT: allows drop
-      dropzone.classList.add("dragover"); // matches .ai-dropzone.dragover in CSS
+    // Keyboard support (Enter/Space)
+    dropzone.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        fileInput?.click();
+      }
     });
 
-    // Remove highlight when leaving
+    dropzone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropzone.classList.add("dragover");
+    });
+
     dropzone.addEventListener("dragleave", () => {
       dropzone.classList.remove("dragover");
     });
 
-    // Handle dropping files
     dropzone.addEventListener("drop", (e) => {
       e.preventDefault();
       dropzone.classList.remove("dragover");
@@ -429,10 +484,8 @@ function bindEvents() {
   }
 
   if (fileInput) {
-    // File picker -> add selected PDFs
     fileInput.addEventListener("change", (e) => {
       addFiles(e.target.files);
-      // Reset input so selecting the same file again still triggers change
       e.target.value = "";
     });
   }
@@ -448,6 +501,32 @@ function bindEvents() {
     setStatus("Idle. Awaiting PDFs…", "");
     setPhase("Ready");
     setProgress(0);
+    setMetrics({ files: 0, chunks: 0, skipped: 0 });
+  });
+
+  copyLogBtn?.addEventListener("click", async () => {
+    const txt = consoleLog?.textContent || "";
+    if (!txt.trim()) return;
+
+    try {
+      await navigator.clipboard.writeText(txt);
+      log("Copied console log to clipboard.");
+    } catch {
+      // fallback for older browsers
+      try {
+        const ta = document.createElement("textarea");
+        ta.value = txt;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+        log("Copied console log to clipboard.");
+      } catch {
+        log("Copy failed. Your browser blocked clipboard access.");
+      }
+    }
   });
 }
 
@@ -456,11 +535,16 @@ function bindEvents() {
    ========================= */
 
 function initParticles() {
-  const canvas = document.getElementById("bgParticles");
+  // FIX: match HTML id
+  const canvas = document.getElementById("aiParticles");
   if (!canvas) return;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
+
+  // subtle, brand-like look
+  ctx.fillStyle = "rgba(2,127,15,.45)";
+  ctx.strokeStyle = "rgba(2,127,15,.35)";
 
   let w, h;
   let particles = [];
@@ -476,8 +560,8 @@ function initParticles() {
       particles.push({
         x: Math.random() * w,
         y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.4,
-        vy: (Math.random() - 0.5) * 0.4,
+        vx: (Math.random() - 0.5) * 0.35,
+        vy: (Math.random() - 0.5) * 0.35,
         r: 1 + Math.random() * 1.5,
       });
     }
@@ -486,13 +570,12 @@ function initParticles() {
   function step() {
     ctx.clearRect(0, 0, w, h);
 
-    // Draw particles
+    // particles
     ctx.globalAlpha = 0.65;
     for (const p of particles) {
       p.x += p.vx;
       p.y += p.vy;
 
-      // Wrap around edges
       if (p.x < 0) p.x = w;
       if (p.x > w) p.x = 0;
       if (p.y < 0) p.y = h;
@@ -503,7 +586,7 @@ function initParticles() {
       ctx.fill();
     }
 
-    // Light connecting lines
+    // connecting lines
     ctx.globalAlpha = 0.12;
     for (let i = 0; i < particles.length; i++) {
       for (let j = i + 1; j < particles.length; j++) {
@@ -544,8 +627,11 @@ function initUI() {
   setProgress(0);
   clearLog();
 
+  setMetrics({ files: 0, chunks: 0, skipped: 0 });
+
   aiChat && (aiChat.innerHTML = "");
   aiAppendBubble("Console online. Drop PDFs and press “Upload & Embed”.");
+  renderFileList();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
