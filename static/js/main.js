@@ -1,13 +1,11 @@
 /*******************************************************
  * Medicine AI - PDF Ingestion Console (Frontend)
  *
- * What this file does (high level):
- * 1) Lets you select / drag-drop PDF files
- * 2) Shows a file list (with remove buttons)
- * 3) Uploads files to the backend endpoint: /api/ingest
- * 4) Shows progress + console log updates
- * 5) Shows AI operator messages with typing effect
- * 6) Runs a simple particle animation in the background
+ * FIXES INCLUDED:
+ * ✅ Prevents file picker opening twice:
+ *   - bindEvents() guarded (no double listener attachment)
+ *   - dropzone click ignores clicks from/inside file input
+ *   - fileInput click stops propagation safely (only if fileInput exists)
  *******************************************************/
 
 /* =========================
@@ -19,7 +17,6 @@ const INGEST_ENDPOINT = `${API_BASE}/api/ingest`;
 
 /* =========================
    2) TYPEWRITER SPEED CONTROL
-   (kept, but no longer used directly for char-by-char)
    ========================= */
 
 const TYPE_BASE_MIN = 6;
@@ -33,26 +30,26 @@ const TYPE_PUNCTUATION_BONUS = 60;
 const $ = (sel) => document.querySelector(sel);
 
 // Top status area
-const statusDot   = $("#statusDot"); // align with HTML id
-const statusText  = $("#statusText");
-const phaseText   = $("#phaseText");
+const statusDot = $("#statusDot");
+const statusText = $("#statusText");
+const phaseText = $("#phaseText");
 const progressBar = $("#progressBar");
 const progressPct = $("#progressPct");
 
 // Metrics
-const mFiles   = $("#mFiles");
-const mChunks  = $("#mChunks");
+const mFiles = $("#mFiles");
+const mChunks = $("#mChunks");
 const mSkipped = $("#mSkipped");
 
 // File selection area
-const dropzone   = $("#dropzone");
-const fileInput  = $("#fileInput");
-const fileList   = $("#fileList");
-const fileCount  = $("#fileCount");
+const dropzone = $("#dropzone");
+const fileInput = $("#fileInput");
+const fileList = $("#fileList");
+const fileCount = $("#fileCount");
 
 // Buttons
-const uploadBtn  = $("#uploadBtn");
-const clearBtn   = $("#clearBtn");
+const uploadBtn = $("#uploadBtn");
+const clearBtn = $("#clearBtn");
 const copyLogBtn = $("#copyLogBtn");
 
 // Console log area
@@ -169,21 +166,10 @@ function aiAppendBubble(text, type = "ai") {
   return wrap;
 }
 
-/**
- * B) Minimal formatting (very light markdown-ish):
- * - **bold**
- * - `inline code`
- * - bullet lists starting with "-" or "•"
- * - paragraphs based on newlines
- *
- * Returns innerHTML to be placed INSIDE <div class="fmt">...</div>
- */
 function formatLite(input) {
   const esc = escapeHtml(String(input));
 
-  // inline code
   let s = esc.replace(/`([^`]+)`/g, "<code>$1</code>");
-  // bold
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 
   const lines = s.split(/\r?\n/);
@@ -224,31 +210,21 @@ function formatLite(input) {
   return html;
 }
 
-/**
- * B) Replace char-by-char typewriter with ChatGPT-like "streaming"
- * - streams by words/spaces
- * - re-renders every few tokens
- * - adds natural pauses on punctuation/newlines
- *
- * (Function name kept SAME for minimal changes elsewhere.)
- */
 async function typewriterToBubble(el, text) {
   if (!el) return;
   const bubble = el.querySelector(".ai-bubble");
   if (!bubble) return;
 
-  // Create a formatting container (styled in CSS)
   bubble.innerHTML = `<div class="fmt"></div>`;
   const holder = bubble.querySelector(".fmt");
   if (!holder) return;
 
-  const tokens = String(text).split(/(\s+)/); // keep spaces
+  const tokens = String(text).split(/(\s+)/);
   let out = "";
 
   for (let i = 0; i < tokens.length; i++) {
     out += tokens[i];
 
-    // update UI every few tokens (smoother + faster)
     if (i % 4 === 0 || i === tokens.length - 1) {
       holder.innerHTML = formatLite(out);
       aiChat.scrollTop = aiChat.scrollHeight;
@@ -265,13 +241,9 @@ async function typewriterToBubble(el, text) {
   aiChat.scrollTop = aiChat.scrollHeight;
 }
 
-/**
- * C) Typing indicator kept as-is (minimal change)
- */
 function aiTypingBubble(show) {
   if (!aiChat) return null;
 
-  // remove existing typing bubble if present
   const existing = aiChat.querySelector(".ai-msg.ai-typing");
   if (existing) existing.remove();
 
@@ -279,8 +251,6 @@ function aiTypingBubble(show) {
 
   const wrap = document.createElement("div");
   wrap.className = "ai-msg ai ai-typing";
-
-  // Use .ai-typing-dots to match CSS
   wrap.innerHTML = `
     <div class="ai-bubble">
       <span class="ai-typing-dots" aria-label="AI is typing">
@@ -405,7 +375,6 @@ async function uploadAndIngest() {
     const data = await res.json().catch(() => ({}));
     setProgress(95);
 
-    // Try to read metrics if backend returns them; fall back sanely.
     const files = Number.isFinite(Number(data?.files)) ? Number(data.files) : selectedFiles.length;
     const chunks = Number.isFinite(Number(data?.chunks)) ? Number(data.chunks) : 0;
     const skipped = Number.isFinite(Number(data?.skipped)) ? Number(data.skipped) : 0;
@@ -451,13 +420,22 @@ async function uploadAndIngest() {
 }
 
 /* =========================
-   10) EVENTS (CLICK, DRAG-DROP, BUTTONS)
+   10) EVENTS
    ========================= */
 
 function bindEvents() {
+  // ✅ Guard: prevents duplicate listener attachment (main cause of double file picker)
+  if (window.__medicineAiEventsBound) return;
+  window.__medicineAiEventsBound = true;
+
   if (dropzone) {
-    // Click opens file picker
-    dropzone.addEventListener("click", () => fileInput?.click());
+    // Click opens file picker (once)
+    dropzone.addEventListener("click", (e) => {
+      // If click came from the input (or inside it), do nothing
+      if (fileInput && (e.target === fileInput || fileInput.contains(e.target))) return;
+      e.preventDefault();
+      fileInput?.click();
+    });
 
     // Keyboard support (Enter/Space)
     dropzone.addEventListener("keydown", (e) => {
@@ -483,10 +461,14 @@ function bindEvents() {
     });
   }
 
+  // ✅ Always null-check fileInput
   if (fileInput) {
+    // Prevent bubbling to dropzone which would trigger fileInput.click() again
+    fileInput.addEventListener("click", (e) => e.stopPropagation());
+
     fileInput.addEventListener("change", (e) => {
       addFiles(e.target.files);
-      e.target.value = "";
+      e.target.value = ""; // allows selecting same file again
     });
   }
 
@@ -496,7 +478,7 @@ function bindEvents() {
     selectedFiles = [];
     renderFileList();
     clearLog();
-    aiChat && (aiChat.innerHTML = "");
+    if (aiChat) aiChat.innerHTML = "";
     aiAppendBubble("Cleared. Ready for new PDFs.");
     setStatus("Idle. Awaiting PDFs…", "");
     setPhase("Ready");
@@ -512,7 +494,6 @@ function bindEvents() {
       await navigator.clipboard.writeText(txt);
       log("Copied console log to clipboard.");
     } catch {
-      // fallback for older browsers
       try {
         const ta = document.createElement("textarea");
         ta.value = txt;
@@ -531,18 +512,16 @@ function bindEvents() {
 }
 
 /* =========================
-   11) PARTICLES (BACKGROUND CANVAS)
+   11) PARTICLES
    ========================= */
 
 function initParticles() {
-  // FIX: match HTML id
   const canvas = document.getElementById("aiParticles");
   if (!canvas) return;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  // subtle, brand-like look
   ctx.fillStyle = "rgba(2,127,15,.45)";
   ctx.strokeStyle = "rgba(2,127,15,.35)";
 
@@ -570,7 +549,6 @@ function initParticles() {
   function step() {
     ctx.clearRect(0, 0, w, h);
 
-    // particles
     ctx.globalAlpha = 0.65;
     for (const p of particles) {
       p.x += p.vx;
@@ -586,7 +564,6 @@ function initParticles() {
       ctx.fill();
     }
 
-    // connecting lines
     ctx.globalAlpha = 0.12;
     for (let i = 0; i < particles.length; i++) {
       for (let j = i + 1; j < particles.length; j++) {
@@ -629,7 +606,7 @@ function initUI() {
 
   setMetrics({ files: 0, chunks: 0, skipped: 0 });
 
-  aiChat && (aiChat.innerHTML = "");
+  if (aiChat) aiChat.innerHTML = "";
   aiAppendBubble("Console online. Drop PDFs and press “Upload & Embed”.");
   renderFileList();
 }

@@ -1,11 +1,14 @@
 import json
 import shutil
-from typing import Optional
+from typing import Optional, Tuple
 from pathlib import Path
 from llama_index.core import VectorStoreIndex
+from llama_index.core import Settings
+
 
 from dataloader import load_documents
 from app_config import init_settings_and_storage
+
 
 def update_list(storage_context, documents):
     vector_store = storage_context.vector_store
@@ -81,7 +84,7 @@ def cleanup_train_data():
                 item.unlink()
 
 
-def build_index() -> Optional[VectorStoreIndex]:
+def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
 
     documents = load_documents()
     if not documents:
@@ -94,10 +97,14 @@ def build_index() -> Optional[VectorStoreIndex]:
         storage_context=storage_context,
         show_progress=True,
     )
+
+    nodes = Settings.node_parser.get_nodes_from_documents(documents)
+    chunk_count = len(nodes)
+
     update_list(storage_context, documents)
     cleanup_train_data()
 
-    return index
+    return index, chunk_count
 
 
 if __name__ == "__main__":

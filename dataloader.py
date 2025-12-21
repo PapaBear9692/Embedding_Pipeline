@@ -9,7 +9,6 @@ from llama_index.core import SimpleDirectoryReader
 ROOT_DIR = Path(__file__).resolve().parent
 PDF_DIR = ROOT_DIR / "data" / "train_data"
 
-
 # ---------- HELPERS ----------
 def normalize_name(filename: str) -> str:
     """Remove leading numeric IDs, normalize and slugify for IDs."""

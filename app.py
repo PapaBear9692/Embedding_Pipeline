@@ -58,16 +58,18 @@ def create_app():
 
         if saved == 0:
             return jsonify({"error": "No valid PDF files to ingest", "files": 0, "chunks": 0, "skipped": skipped}), 400
-
-        
+        chunk_count = 0
         try:
-            build_index()
-        except Exception as e:
-            # If indexing fails, do NOT hide the error from frontend
-            return jsonify({"error": str(e), "files": saved, "chunks": 0, "skipped": skipped}), 500
+            result = build_index()
+            if result is None:
+                chunk_count = 0
+            else:
+                index, chunk_count = result
 
-        # Your frontend reads these metrics. We can return chunks=0 unless you add counting (see section 3).
-        return jsonify({"files": saved, "chunks": 0, "skipped": skipped})
+        except Exception as e:
+            return jsonify({"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}), 500
+
+        return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
 
     return app
 
