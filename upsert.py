@@ -101,7 +101,7 @@ def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
     nodes = Settings.node_parser.get_nodes_from_documents(documents)
     chunk_count = len(nodes)
 
-    update_list(storage_context, documents)
+    # update_list(storage_context, documents)
     cleanup_train_data()
 
     return index, chunk_count
