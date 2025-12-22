@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI PDF Ingestion • Medicine Assistant</title>
+  <title>AI Model Trainig • Medicine Chatbot</title>
 
   <!-- Bootstrap 5.3.8 -->
   <link
@@ -40,7 +40,7 @@
 
           <div class="title-block">
             <h1 class="app-title">Chatbot Training Interface</h1>
-            <!-- <p class="app-subtitle">PDF Ingestion Console</p> -->
+            <!-- <p class="app-subtitle">PDF Training Console</p> -->
           </div>
         </div>
 
@@ -67,7 +67,7 @@
                 <div>
                   <h2 class="h4 mb-1 fw-bold">Upload Training PDFs</h2>
                   <p class="mb-0 ai-muted">
-                    Drop medicine leaflet PDFs. Server will chunk, embed and store vectors.
+                    Drop medicine leaflet PDFs here. The Pipeline will train the model.
                   </p>
                 </div>
               </div>
@@ -87,7 +87,7 @@
 
               <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
                 <button id="uploadBtn" class="btn ai-btn-brand" type="button">
-                  <i class="bi bi-stars"></i> Upload & Embed
+                  <i class="bi bi-stars"></i> Upload & Train
                 </button>
 
                 <button id="clearBtn" class="btn ai-btn-outline-pill" type="button">
@@ -96,7 +96,7 @@
 
                 <div class="ms-0 ms-md-auto small ai-muted">
                   Endpoint:
-                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/ingest</code>
+                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/train</code>
                 </div>
               </div>
 

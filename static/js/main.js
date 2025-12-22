@@ -1,5 +1,5 @@
 /*******************************************************
- * Medicine AI - PDF Ingestion Console (Frontend)
+ * Medicine Chatbot - PDF Training Console (Frontend)
  *
  * FIXES INCLUDED:
  * ✅ Prevents file picker opening twice:
@@ -345,7 +345,7 @@ async function uploadAndIngest() {
   setStatus("Uploading PDFs…", "online");
   setPhase("Upload");
   setProgress(5);
-  log("Starting ingestion request...");
+  log("Starting training request...");
 
   aiTypingBubble(true);
 
@@ -381,16 +381,16 @@ async function uploadAndIngest() {
 
     setMetrics({ files, chunks, skipped });
 
-    setStatus("Ingestion complete.", "online");
+    setStatus("Trainig complete.", "online");
     setPhase("Complete");
-    log("Ingestion complete.");
+    log("Training complete.");
     log(`Metrics: files=${files}, chunks=${chunks}, skipped=${skipped}`);
 
     aiTypingBubble(false);
     const bubble = aiAppendBubble("", "ai");
     await typewriterToBubble(
       bubble,
-      `**Ingestion successful ✅**\n- Processed **${files}** file(s)\n- Ready for your next upload`
+      `**Training successful ✅**\n- Processed **${files}** file(s)\n- Ready for your next upload`
     );
 
     selectedFiles = [];
@@ -399,7 +399,7 @@ async function uploadAndIngest() {
   } catch (err) {
     aiTypingBubble(false);
 
-    setStatus("Error during ingestion.", "error");
+    setStatus("Error during Training.", "error");
     setPhase("Failed");
     setProgress(0);
     log(`ERROR: ${String(err?.message || err)}`);
