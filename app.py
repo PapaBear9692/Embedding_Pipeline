@@ -17,7 +17,7 @@ def create_app():
     app = Flask(__name__)
 
     # Optional: limit upload size (e.g., 50MB total request)
-    app.config["MAX_CONTENT_LENGTH"] = 50 * 1024 * 1024
+    app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
 
     UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
