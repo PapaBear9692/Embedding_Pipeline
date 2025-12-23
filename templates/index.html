@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Model Trainig • Medicine Chatbot</title>
+  <title>Medicine ChatBot Training Console</title>
 
   <!-- Bootstrap 5.3.8 -->
   <link
@@ -39,8 +39,8 @@
           </a>
 
           <div class="title-block">
-            <h1 class="app-title">Chatbot Training Interface</h1>
-            <!-- <p class="app-subtitle">PDF Training Console</p> -->
+            <h1 class="app-title">Chatbot Training Console</h1>
+            <!-- <p class="app-subtitle">Chatbot Training Console</p> -->
           </div>
         </div>
 
@@ -91,13 +91,13 @@
                 </button>
 
                 <button id="clearBtn" class="btn ai-btn-outline-pill" type="button">
-                  <i class="bi bi-x-circle"></i> Clear
+                  <i class="bi bi-x-circle"></i> Clear all
                 </button>
 
-                <div class="ms-0 ms-md-auto small ai-muted">
+                <!-- <div class="ms-0 ms-md-auto small ai-muted">
                   Endpoint:
-                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/train</code>
-                </div>
+                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/ingest</code>
+                </div> -->
               </div>
 
               <hr class="ai-hr my-3 my-md-4">
@@ -183,6 +183,65 @@
       <p>© 2025 <a href="https://www.squarepharma.com.bd" target="_blank" rel="noopener">Square Pharmaceuticals PLC.</a> All rights reserved.</p>
     </footer>
   </div>
+
+    <!-- Processing Overlay (hidden by default) -->
+  <div id="processingOverlay" class="overlay hidden" aria-hidden="true">
+    <div class="overlay-card" role="status" aria-live="polite">
+      <!-- Simple inline SVG "chatbot reading a book" animation -->
+      <div class="bot-wrap">
+        <svg class="bot-svg" viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">
+          <!-- Shadow -->
+          <ellipse cx="160" cy="200" rx="90" ry="14" fill="rgba(0,0,0,0.12)"/>
+
+          <!-- Book -->
+          <g class="book">
+            <path d="M75 140 Q120 120 160 140 Q200 120 245 140 L245 190 Q200 170 160 190 Q120 170 75 190 Z"
+                  fill="#f3f4f6" stroke="#cbd5e1" stroke-width="3"/>
+            <path d="M160 140 L160 190" stroke="#cbd5e1" stroke-width="3"/>
+            <!-- Pages -->
+            <path class="page page1" d="M95 150 Q125 140 155 150" stroke="#94a3b8" stroke-width="3" fill="none"/>
+            <path class="page page2" d="M95 163 Q125 153 155 163" stroke="#94a3b8" stroke-width="3" fill="none"/>
+            <path class="page page3" d="M165 150 Q195 140 225 150" stroke="#94a3b8" stroke-width="3" fill="none"/>
+            <path class="page page4" d="M165 163 Q195 153 225 163" stroke="#94a3b8" stroke-width="3" fill="none"/>
+          </g>
+
+          <!-- Bot Body -->
+          <g class="bot">
+            <rect x="110" y="70" width="100" height="90" rx="20" fill="#e0f2fe" stroke="#0284c7" stroke-width="4"/>
+            <rect x="125" y="85" width="70" height="40" rx="12" fill="#ffffff" stroke="#7dd3fc" stroke-width="3"/>
+
+            <!-- Eyes (blink) -->
+            <circle class="eye eyeL" cx="150" cy="105" r="6" fill="#0f172a"/>
+            <circle class="eye eyeR" cx="170" cy="105" r="6" fill="#0f172a"/>
+
+            <!-- Mouth -->
+            <path d="M150 122 Q160 130 170 122" stroke="#0f172a" stroke-width="3" fill="none" stroke-linecap="round"/>
+
+            <!-- Antenna -->
+            <line x1="160" y1="70" x2="160" y2="50" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
+            <circle class="antennaDot" cx="160" cy="46" r="6" fill="#38bdf8"/>
+
+            <!-- Arms -->
+            <path d="M110 115 Q90 125 88 145" stroke="#0284c7" stroke-width="5" fill="none" stroke-linecap="round"/>
+            <path d="M210 115 Q230 125 232 145" stroke="#0284c7" stroke-width="5" fill="none" stroke-linecap="round"/>
+          </g>
+
+          <!-- Little "thinking" dots -->
+          <g class="thoughts" fill="#38bdf8">
+            <circle class="tDot t1" cx="235" cy="60" r="5"/>
+            <circle class="tDot t2" cx="255" cy="45" r="4"/>
+            <circle class="tDot t3" cx="275" cy="35" r="3"/>
+          </g>
+        </svg>
+      </div>
+
+      <div class="status-text">
+        <div id="processingTitle" class="status-title">Please, give me some time, processing the files<span id="dots">...</span></div>
+        <div id="processingSub" class="status-sub">I'm reading your documents and trying to understand them.</div>
+      </div>
+    </div>
+  </div>
+  <!-- /Processing Overlay (hidden by default) -->
 
   <!-- Bootstrap bundle -->
   <script

@@ -55,6 +55,9 @@
   .app-title{ font-size: .95rem; }
   .app-subtitle{ font-size: .72rem; }
   .page-body{ padding: 12px 10px 8px; }
+  
+  .status-title{ font-size: 16px; }
+  .status-sub{ font-size: 13px; }
 }
 
 @media (max-width: 320px){
@@ -65,4 +68,26 @@
   .app-title{ font-size: .95rem; }
   .app-subtitle{ font-size: .72rem; }
   .page-body{ padding: 12px 10px 8px; }
+}
+
+@media (max-width: 360px){
+  .status-title{ font-size: 15px; }
+  .status-sub{ font-size: 12.5px; }
+}
+
+@media (max-width: 320px){
+  .overlay-card{
+    padding: 12px;
+  }
+  .bot-svg{
+    width: 150px; /* keep it compact */
+  }
+  .status-title{
+    font-size: 15px;
+    line-height: 1.2;
+  }
+  .status-sub{
+    font-size: 12.5px;
+    line-height: 1.35;
+  }
 }

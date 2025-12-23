@@ -477,3 +477,125 @@ body{
   font-size: .9em;
 }
 .ai-bubble .fmt strong { font-weight: 700; }
+
+
+
+/*====================== Overlay CSS ================= */
+.hidden { display: none !important; }
+
+  .overlay{
+    position: fixed;
+    inset: 0;
+    /* background: rgba(15, 23, 42, 0.55); */
+    background: rgba(255, 255, 255, 0.08);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+    /* padding: 16px; */
+    padding: 0;
+  }
+  .overlay-card{
+    /* width: min(620px, 100%); */
+    /* background: #fff; */
+    /* background: rgba(255, 255, 255, 0.85); */
+    width: 100vw;
+    height: 100vh;
+    background: transparent;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
+    
+    -webkit-backdrop-filter: blur(8px);
+    
+    /* border-radius: 18px; */
+    border-radius: 0;
+    /* padding: 18px 18px 14px; */
+    /* box-shadow: 0 20px 60px rgba(0,0,0,0.25); */
+
+    /* CHANGED: stack content vertically */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+
+    gap: 12px;
+
+
+    /* responsive property*/
+    /* max-width: min(620px, 92vw); */
+    /* max-height: calc(100vh - 32px); */
+    overflow: auto;
+    box-sizing: border-box;
+    padding: clamp(12px, 2.5vw, 18px);
+    justify-content: center;
+
+  }
+  @media (max-width: 560px){
+  .overlay-card{ text-align: center; }
+  }
+
+
+  .bot-wrap{ display: grid; place-items: center; margin-bottom: 4px;}
+  /* .bot-svg{ width: 220px; max-width: 100%; height: auto; } */
+  .bot-svg{
+  width: clamp(150px, 35vw, 220px);
+  max-width: 100%;
+  height: auto;
+  }
+  .status-text{
+  width: 100%;
+  }
+
+  .status-title{
+    font-size: 18px;
+    font-weight: 700;
+    color: #0f172a;
+    line-height: 1.25;
+  }
+  .status-sub{
+    margin-top: 8px;
+    font-size: 15px;
+    color: #334155;
+    line-height: 1.4;
+  }
+
+  /* Animations */
+  .antennaDot { animation: pulse 1.2s infinite ease-in-out; transform-origin: center; }
+  @keyframes pulse{
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.35); opacity: 0.7; }
+  }
+
+  .eye { transform-origin: center; animation: blink 4s infinite; }
+  @keyframes blink{
+    0%, 96%, 100% { transform: scaleY(1); }
+    97% { transform: scaleY(0.15); }
+    98% { transform: scaleY(1); }
+  }
+
+  .book { animation: bob 1.6s infinite ease-in-out; transform-origin: center; }
+  @keyframes bob{
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-4px); }
+  }
+
+  .page { stroke-linecap: round; opacity: 0.55; }
+  .page1 { animation: pageGlow 1.8s infinite; }
+  .page2 { animation: pageGlow 1.8s infinite 0.2s; }
+  .page3 { animation: pageGlow 1.8s infinite 0.4s; }
+  .page4 { animation: pageGlow 1.8s infinite 0.6s; }
+  @keyframes pageGlow{
+    0%, 100% { opacity: 0.35; }
+    50% { opacity: 0.95; }
+  }
+
+  .tDot { opacity: 0.3; }
+  .t1 { animation: floatDot 1.4s infinite; }
+  .t2 { animation: floatDot 1.4s infinite 0.15s; }
+  .t3 { animation: floatDot 1.4s infinite 0.3s; }
+  @keyframes floatDot{
+    0%, 100% { transform: translateY(0); opacity: 0.25; }
+    50% { transform: translateY(-6px); opacity: 1; }
+  }
+  /*====================== Overlay CSS ================= */

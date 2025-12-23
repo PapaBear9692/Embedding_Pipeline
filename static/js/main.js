@@ -1,5 +1,5 @@
 /*******************************************************
- * Medicine Chatbot - PDF Training Console (Frontend)
+ * Medicine ChatBot - Training Console (Frontend)
  *
  * FIXES INCLUDED:
  * ✅ Prevents file picker opening twice:
@@ -22,6 +22,9 @@ const INGEST_ENDPOINT = `${API_BASE}/api/ingest`;
 const TYPE_BASE_MIN = 6;
 const TYPE_BASE_MAX = 18;
 const TYPE_PUNCTUATION_BONUS = 60;
+
+// Separate speed control for processingSub typewriter (ms per character)
+const SUB_TYPE_SPEED_MS = 60;
 
 /* =========================
    3) ELEMENT REFERENCES
@@ -151,6 +154,98 @@ function setFileCount(n) {
   if (!fileCount) return;
   fileCount.textContent = String(clampInt(n, 0, 1_000_000));
 }
+
+
+/* =========================
+   PROCESSING OVERLAY (ANIMATION)
+   ========================= */
+
+const processingOverlay = document.getElementById("processingOverlay");
+const processingTitle = document.getElementById("processingTitle");
+const processingSub = document.getElementById("processingSub");
+const dots = document.getElementById("dots");
+
+let dotsTimer = null;
+
+let __subTypeRunId = 0;
+
+async function typewriterProcessingSub(text) {
+  if (!processingSub) return;
+
+  const runId = ++__subTypeRunId;
+  processingSub.textContent = "";
+
+  const s = String(text);
+
+  for (let i = 0; i < s.length; i++) {
+    // cancel if a new run started
+    if (runId !== __subTypeRunId) return;
+
+    processingSub.textContent += s[i];
+
+    // small natural pauses
+    const ch = s[i];
+    const extra =
+      (ch === "." || ch === "!" || ch === "?" || ch === ",") ? SUB_TYPE_SPEED_MS * 3 :
+      (ch === "\n") ? SUB_TYPE_SPEED_MS * 6 :
+      0;
+
+    await sleep(SUB_TYPE_SPEED_MS + extra);
+  }
+}
+
+function showProcessingOverlay() {
+  if (!processingOverlay) return;
+
+  processingOverlay.classList.remove("hidden");
+  processingOverlay.setAttribute("aria-hidden", "false");
+
+  if (processingTitle && processingTitle.firstChild) {
+  processingTitle.firstChild.nodeValue = "Please, give me some time, processing the files ";}
+
+  typewriterProcessingSub("I'm reading the documents and trying to understand them.");
+
+  // animated dots ( ... )
+  if (dots) {
+    let n = 0;
+    dots.textContent = "...";
+    if (dotsTimer) clearInterval(dotsTimer);
+    dotsTimer = setInterval(() => {
+      n = (n + 1) % 4;
+      dots.textContent = ".".repeat(n) || "";
+    }, 350);
+  }
+}
+
+async function showProcessingSuccess() {
+  if (!processingOverlay) return;
+
+  if (dotsTimer) clearInterval(dotsTimer);
+  dotsTimer = null;
+  if (dots) dots.textContent = "";
+
+  if (processingTitle && processingTitle.firstChild) {
+  processingTitle.firstChild.nodeValue = "Got it, task has been executed successful ";}
+
+  // auto-hide after a short moment
+  await typewriterProcessingSub("Your files were processed and added to my knowledge base.");
+  await sleep(350);
+  hideProcessingOverlay();
+}
+
+function hideProcessingOverlay() {
+
+  __subTypeRunId++; // cancel any running processingSub typewriter
+
+  if (dotsTimer) clearInterval(dotsTimer);
+  dotsTimer = null;
+
+  if (!processingOverlay) return;
+  processingOverlay.classList.add("hidden");
+  processingOverlay.setAttribute("aria-hidden", "true");
+}
+
+
 
 /* =========================
    7) CHAT UI (AI OPERATOR)
@@ -330,6 +425,9 @@ function renderFileList() {
    ========================= */
 
 async function uploadAndIngest() {
+
+  let ingestSucceeded = false;
+
   if (!selectedFiles.length) {
     aiAppendBubble("No PDFs selected. Add files first.");
     return;
@@ -349,12 +447,18 @@ async function uploadAndIngest() {
 
   aiTypingBubble(true);
 
+  // animation overlay
+  // ✅ ADD THIS
+  showProcessingOverlay();
+  // animation overlay
+
+
   try {
     const formData = new FormData();
     selectedFiles.forEach((f) => formData.append("files", f, f.name));
 
     setProgress(20);
-    log(`Uploading ${selectedFiles.length} file(s) to ${INGEST_ENDPOINT}`);
+    log(`Uploading ${selectedFiles.length} file(s) to server...`);
 
     const res = await fetch(INGEST_ENDPOINT, {
       method: "POST",
@@ -381,9 +485,16 @@ async function uploadAndIngest() {
 
     setMetrics({ files, chunks, skipped });
 
-    setStatus("Trainig complete.", "online");
+    setStatus("Training complete.", "online");
     setPhase("Complete");
     log("Training complete.");
+    
+    // overlay
+    ingestSucceeded = true;
+    // ✅ ADD THIS
+    await showProcessingSuccess();
+    // overlay
+
     log(`Metrics: files=${files}, chunks=${chunks}, skipped=${skipped}`);
 
     aiTypingBubble(false);
@@ -397,9 +508,15 @@ async function uploadAndIngest() {
     renderFileList();
     setProgress(100);
   } catch (err) {
+    
+    // overlay animation
+    // ✅ ADD THIS
+    if (!ingestSucceeded) hideProcessingOverlay();
+    // overlay animation
+
     aiTypingBubble(false);
 
-    setStatus("Error during Training.", "error");
+    setStatus("Error during training.", "error");
     setPhase("Failed");
     setProgress(0);
     log(`ERROR: ${String(err?.message || err)}`);
@@ -410,6 +527,12 @@ async function uploadAndIngest() {
       `I hit an error talking to the server.\n\n**Reason:** \`${String(err?.message || err)}\`\n\nCheck the console log and try again.`
     );
   } finally {
+
+    // animation overlay
+    // ✅ ADD THIS (safety in case any path didn’t close it)
+    if (!ingestSucceeded) hideProcessingOverlay();
+    // animation overlay
+
     uploadBtn?.removeAttribute("disabled");
     clearBtn?.removeAttribute("disabled");
     fileInput?.removeAttribute("disabled");
@@ -607,7 +730,7 @@ function initUI() {
   setMetrics({ files: 0, chunks: 0, skipped: 0 });
 
   if (aiChat) aiChat.innerHTML = "";
-  aiAppendBubble("Console online. Drop PDFs and press “Upload & Embed”.");
+  aiAppendBubble("Console online. Drop PDFs and press “Upload & Train.");
   renderFileList();
 }
 
