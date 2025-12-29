@@ -7,15 +7,16 @@ from upsert import build_index  # calls your existing pipeline
 ROOT_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = ROOT_DIR / "data" / "train_data"
 
-ALLOWED_EXTENSIONS = {".pdf"}
+ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 
 def allowed_file(filename: str) -> bool:
     ext = Path(filename).suffix.lower()
     return ext in ALLOWED_EXTENSIONS
 
 def create_app():
-    print("Starting Flask app...")
+
     app = Flask(__name__)
+    print("Flask app running...")
 
     # Optional: limit upload size (e.g., 50MB total request)
     app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
@@ -27,7 +28,7 @@ def create_app():
         print("Rendering home page...")
         return render_template("index.html")
 
-    @app.post("/api/ingest")
+    @app.post("/api/train")
     def ingest():
         print("Received ingest request...")
         # Frontend sends "files" (multiple)

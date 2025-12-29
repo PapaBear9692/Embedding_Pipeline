@@ -14,7 +14,7 @@
    ========================= */
 
 const API_BASE = ""; // keep "" when same origin
-const INGEST_ENDPOINT = `${API_BASE}/api/ingest`;
+const INGEST_ENDPOINT = `${API_BASE}/api/train`;
 
 /* =========================
    2) DOM HELPERS
@@ -199,8 +199,8 @@ function renderFileList() {
   // Empty state
   if (!selectedFiles.length) {
     fileList.innerHTML = `<div class="ai-muted small">No files selected.</div>`;
-    updateFileCount(); // or setFileCount(0) if you use that helper
-    setMetrics?.({ files: 0, chunks: Number(mChunks?.textContent || 0), skipped: Number(mSkipped?.textContent || 0) });
+    // or setFileCount(0) if you use that helper
+    setMetrics?.({ files: Number(mFiles?.textContent || 0), chunks: Number(mChunks?.textContent || 0), skipped: Number(mSkipped?.textContent || 0) });
     return;
   }
 
@@ -249,7 +249,7 @@ function renderFileList() {
 
 // One line at a time
 const OVERLAY_LINES = [
-  "Okay, Uploading your PDFs to my workspace.. This won't take long!",
+  "Okay, Uploading your Files to my workspace.. This won't take long!",
   "Now I'm reading through all the text in your documents. Fascinating stuff!",
   "Breaking down the contents into small chapters so that i can understand it better.",
   "Converting everything into a format my AI brain can process. This is where the magic happens!",
@@ -393,7 +393,7 @@ async function showProcessingSuccess() {
 
   const runId = overlayRunId;
 
-  const msg = "Done. Training complete — I'm ready to answer using your PDFs.";
+  const msg = "Done. Training complete — I'm ready to answer using your Files.";
 
   if (container === processingLines) {
     const node = document.createElement("div");
@@ -412,7 +412,6 @@ async function showProcessingSuccess() {
 function clearFilesAfterSuccess() {
   selectedFiles = [];
   renderFileList();
-  updateFileCount();
 }
 
 
@@ -436,12 +435,31 @@ function isPdf(file) {
   return nameOk || typeOk;
 }
 
+function isSupportedFile(file) {
+  if (!file) return false;
+
+  const name = (file.name || "").toLowerCase();
+  const type = (file.type || "").toLowerCase();
+
+  // extension check (reliable even when MIME is missing)
+  const typeOk = /\.(pdf|doc|docx|txt)$/.test(name);
+
+  // MIME check (some browsers provide this)
+  const mimeOk = [
+    "application/pdf",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
+    "text/plain",
+  ].includes(type);
+
+  return typeOk || mimeOk;
+}
+
 function fileKey(file) {
   return `${file.name}::${file.size}::${file.lastModified}`;
 }
 
 function addFiles(fileListLike) {
-  const incoming = Array.from(fileListLike || []).filter(isPdf);
+  const incoming = Array.from(fileListLike || []).filter(isSupportedFile); //.filter(isPdf);
   if (!incoming.length) {
     setStatus("Please select PDF files only.", "error");
     return;
@@ -466,7 +484,7 @@ function addFiles(fileListLike) {
     skipped: Number(mSkipped?.textContent || 0),
   });
 
-  setStatus(added ? `Added ${added} PDF${added === 1 ? "" : "s"}.` : "These PDFs are already added.", "online");
+  setStatus(added ? `Added ${added} File${added === 1 ? "" : "s"}.` : "These Files are already added.", "online");
 }
 
 function clearFiles() {
@@ -505,15 +523,15 @@ function stopSimulatedProgress(finalPct = 100) {
 
 async function uploadAndIngest() {
   if (!selectedFiles.length) {
-    setStatus("No PDFs selected. Add files first.", "error");
-    log("Ingest blocked: no files selected.");
+    setStatus("No Files selected. Add files first.", "error");
+    log("Training blocked: no files selected.");
     return;
   }
 
   setDisabled(true);
   setStatus("Training in progress…", "online");
   setPhase("Uploading & indexing");
-  log(`Starting Training: ${selectedFiles.length} PDF(s).`);
+  log(`Starting Training: ${selectedFiles.length} File(s).`);
 
   showProcessingOverlay(selectedFiles.length);
   startSimulatedProgress();
@@ -550,7 +568,7 @@ async function uploadAndIngest() {
     setStatus("Training failed.", "error");
     log(`ERROR: ${err?.message || err}`);
     hideProcessingOverlay();
-    alert(`Ingest failed: ${err?.message || err}`);
+    alert(`Training failed: ${err?.message || err}`);
   } finally {
     setDisabled(false);
   }

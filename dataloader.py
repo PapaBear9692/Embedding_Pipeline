@@ -18,6 +18,12 @@ def normalize_name(filename: str) -> str:
     base = re.sub(r"\s+", "-", base)
     return re.sub(r"[^a-z0-9\-]", "", base)
 
+def prettify_filename(filename: str) -> str:
+    name = Path(filename).stem
+    name = re.sub(r"[_\-]+", " ", name)
+    name = re.sub(r"\s+", " ", name).strip()
+    return name
+
 
 def extract_product_name(text: str, filename: str) -> str:
     """Try 'Brand name:' in text, fallback to pretty version of filename."""
@@ -44,7 +50,7 @@ def load_documents():
 
     reader = SimpleDirectoryReader(
         input_dir=str(PDF_DIR),
-        required_exts=[".pdf", ".doc", ".docx", ".txt"],
+        required_exts=[".pdf",".docx", ".txt"],
         recursive=False,
     )
 
@@ -62,7 +68,7 @@ def load_documents():
             {
                 "product_name": extract_product_name(text, filename),
                 "usage": extract_usage(text),
-                "file_name": filename,
+                "file_name": prettify_filename(filename),
                 "normalized_name": normalize_name(filename),
             }
         )

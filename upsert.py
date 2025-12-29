@@ -13,7 +13,7 @@ from app_config import init_settings_and_storage
 def update_list(storage_context, documents):
     vector_store = storage_context.vector_store
     pinecone_index = vector_store._pinecone_index
-    node_id = "f3f7bfd0-45d6-450f-82ec-b529d242a8b4#893da7cd-66a7-4978-8094-5f5c7b6b8696"
+    node_id = "3f32be6a-da67-42b8-8e7c-160ac8fe4c09#6236bdd4-5ab3-477f-bd81-9e17d97f3de5"
 
     # 1) collect product names from filenames (remove .pdf)
     new_items = [
@@ -102,7 +102,7 @@ def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
     nodes = Settings.node_parser.get_nodes_from_documents(documents)
     chunk_count = len(nodes)
 
-    #update_list(storage_context, documents)
+    update_list(storage_context, documents)
     cleanup_train_data()
 
     return index, chunk_count
