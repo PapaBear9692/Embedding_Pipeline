@@ -502,7 +502,7 @@ body{
     width: 100vw;
     height: 100vh;
     background: transparent;
-    backdrop-filter: blur(8px);
+    backdrop-filter: blur(3px);
     border: 1px solid rgba(255, 255, 255, 0.35);
     box-shadow: 0 20px 60px rgba(15, 23, 42, 0.18);
     
@@ -538,8 +538,9 @@ body{
 
   .bot-wrap{ display: grid; place-items: center; margin-bottom: 4px;}
   /* .bot-svg{ width: 220px; max-width: 100%; height: auto; } */
-  .bot-svg{
-  width: clamp(150px, 35vw, 220px);
+  .lottie-anim{
+  /* width: clamp(150px, 35vw, 220px); */
+  width: clamp(180px, 40vw, 320px);  /* bigger */
   max-width: 100%;
   height: auto;
   }
@@ -559,6 +560,57 @@ body{
     color: #334155;
     line-height: 1.4;
   }
+  /* NEW: multi-line processing lines */
+  .status-lines{
+    margin-top: 10px;
+    display: grid;
+    gap: 10px;
+    width: min(720px, 92vw);
+    margin-left: auto;
+    margin-right: auto;
+    text-align: center;
+  }
+
+  .status-line{
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity .28s ease, transform .28s ease;
+    
+    font-size: 20px;              
+    font-weight: 450;             
+    color: #0d2c04;              
+    letter-spacing: 0.2px;
+    line-height: 1.45;
+    text-shadow: 0 0 0.01px rgba(2,6,23,.6);
+  }
+
+  .status-line.show{
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .status-line.hide{
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: opacity .25s ease, transform .25s ease;
+}
+
+
+  /* typewriter caret */
+  .status-line .tw-caret{
+    display: inline-block;
+    width: 1px;
+    height: 1em;
+    vertical-align: -2px;
+    margin-left: 3px;
+    background: rgba(15, 23, 42, .55);
+    animation: twBlink .9s step-end infinite;
+  }
+
+  @keyframes twBlink{
+    50%{ opacity: 0; }
+  }
+
 
   /* Animations */
   .antennaDot { animation: pulse 1.2s infinite ease-in-out; transform-origin: center; }

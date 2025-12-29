@@ -85,12 +85,13 @@ def cleanup_train_data():
 
 
 def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
-
+    print("Building index...")
     documents = load_documents()
     if not documents:
         return None
 
     storage_context = init_settings_and_storage()
+    print("Created VectorStore Index...")
 
     index = VectorStoreIndex.from_documents(
         documents,
@@ -101,7 +102,7 @@ def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
     nodes = Settings.node_parser.get_nodes_from_documents(documents)
     chunk_count = len(nodes)
 
-    update_list(storage_context, documents)
+    #update_list(storage_context, documents)
     cleanup_train_data()
 
     return index, chunk_count

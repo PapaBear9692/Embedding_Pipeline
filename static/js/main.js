@@ -1,36 +1,31 @@
-/*******************************************************
- * Medicine ChatBot - Training Console (Frontend)
- *
- * FIXES INCLUDED:
- * ✅ Prevents file picker opening twice:
- *   - bindEvents() guarded (no double listener attachment)
- *   - dropzone click ignores clicks from/inside file input
- *   - fileInput click stops propagation safely (only if fileInput exists)
- *******************************************************/
+/* =====================================================
+ * Medicine ChatBot — Training Console (Frontend)
+ * Cleaned + optimized main.js
+ * - Single, reliable overlay sequence (one line at a time)
+ * - Old line fades out & is removed (requires #processingLines + CSS .hide)
+ * - Overlay always stops + hides on success/error
+ * - Faster timings + cleaner UI helpers
+ * - Removed unused chat-bubble code
+ * ===================================================== */
+"use strict";
 
 /* =========================
    1) BACKEND CONFIG
    ========================= */
 
-const API_BASE = "";
+const API_BASE = ""; // keep "" when same origin
 const INGEST_ENDPOINT = `${API_BASE}/api/ingest`;
 
 /* =========================
-   2) TYPEWRITER SPEED CONTROL
+   2) DOM HELPERS
    ========================= */
 
-const TYPE_BASE_MIN = 6;
-const TYPE_BASE_MAX = 18;
-const TYPE_PUNCTUATION_BONUS = 60;
-
-// Separate speed control for processingSub typewriter (ms per character)
-const SUB_TYPE_SPEED_MS = 60;
+const $ = (sel) => document.querySelector(sel);
+const on = (el, evt, fn, opts) => el && el.addEventListener(evt, fn, opts);
 
 /* =========================
    3) ELEMENT REFERENCES
    ========================= */
-
-const $ = (sel) => document.querySelector(sel);
 
 // Top status area
 const statusDot = $("#statusDot");
@@ -43,6 +38,9 @@ const progressPct = $("#progressPct");
 const mFiles = $("#mFiles");
 const mChunks = $("#mChunks");
 const mSkipped = $("#mSkipped");
+
+// Endpoint
+const endpointText = $("#endpointText");
 
 // File selection area
 const dropzone = $("#dropzone");
@@ -58,15 +56,37 @@ const copyLogBtn = $("#copyLogBtn");
 // Console log area
 const consoleLog = $("#consoleLog");
 
-// Chat area
-const aiChat = $("#aiChat");
-const aiMood = $("#aiMood");
+// Overlay
+const processingOverlay = $("#processingOverlay");
+const lottieOverlayEl = $("#lottieOverlayAnim");
+
+// New overlay container (preferred)
+const processingLines = $("#processingLines");
+
+// Legacy overlay elements (if your HTML still has them)
+const processingTitle = $("#processingTitle");
+const processingSub = $("#processingSub");
+const dots = $("#dots");
+
+// Particles
+const particlesCanvas = $("#aiParticles");
 
 /* =========================
    4) APP STATE
    ========================= */
 
 let selectedFiles = [];
+let eventsBound = false;
+
+// Simulated progress
+let progressTimer = null;
+
+// Lottie
+let overlayLottie = null;
+let overlayLottieLoaded = false;
+
+// Overlay sequencing
+let overlayRunId = 0;
 
 /* =========================
    5) SMALL UTILITIES
@@ -81,15 +101,20 @@ function nowTime() {
 }
 
 function bytesToSize(bytes) {
-  if (!Number.isFinite(bytes)) return "";
-  const sizes = ["B", "KB", "MB", "GB"];
+  const n = Number(bytes) || 0;
+  if (n < 1024) return `${n} B`;
+  const units = ["KB", "MB", "GB"];
+  let v = n / 1024;
   let i = 0;
-  let n = bytes;
-  while (n >= 1024 && i < sizes.length - 1) {
-    n /= 1024;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
     i++;
   }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${sizes[i]}`;
+  return `${v.toFixed(v >= 10 ? 0 : 1)} ${units[i]}`;
+}
+
+function clamp(num, min, max) {
+  return Math.max(min, Math.min(max, num));
 }
 
 function escapeHtml(str) {
@@ -101,10 +126,12 @@ function escapeHtml(str) {
     .replaceAll("'", "&#039;");
 }
 
-function clampInt(n, min, max) {
-  const x = Number(n);
-  if (!Number.isFinite(x)) return min;
-  return Math.max(min, Math.min(max, Math.trunc(x)));
+function setDisabled(disabled) {
+  const d = !!disabled;
+  if (uploadBtn) uploadBtn.disabled = d;
+  if (clearBtn) clearBtn.disabled = d;
+  if (fileInput) fileInput.disabled = d;
+  if (dropzone) dropzone.setAttribute("aria-disabled", d ? "true" : "false");
 }
 
 /* =========================
@@ -117,25 +144,25 @@ function setDot(mode) {
   if (mode) statusDot.classList.add(mode);
 }
 
-function setProgress(pct) {
-  const clamped = Math.max(0, Math.min(100, pct));
-  if (progressBar) progressBar.style.width = `${clamped}%`;
-  if (progressPct) progressPct.textContent = `${Math.round(clamped)}%`;
+function setStatus(text, mode = "online") {
+  if (statusText) statusText.textContent = text ?? "";
+  setDot(mode);
 }
 
 function setPhase(label) {
-  if (phaseText) phaseText.textContent = label;
+  if (phaseText) phaseText.textContent = label ?? "";
 }
 
-function setStatus(text, dotMode) {
-  if (statusText) statusText.textContent = text;
-  setDot(dotMode || "");
+function setProgress(pct) {
+  const p = clamp(Number(pct) || 0, 0, 100);
+  if (progressBar) progressBar.style.width = `${p}%`;
+  if (progressPct) progressPct.textContent = `${Math.round(p)}%`;
 }
 
 function setMetrics({ files = 0, chunks = 0, skipped = 0 } = {}) {
-  if (mFiles) mFiles.textContent = String(clampInt(files, 0, 1_000_000));
-  if (mChunks) mChunks.textContent = String(clampInt(chunks, 0, 9_999_999));
-  if (mSkipped) mSkipped.textContent = String(clampInt(skipped, 0, 9_999_999));
+  if (mFiles) mFiles.textContent = String(files);
+  if (mChunks) mChunks.textContent = String(chunks);
+  if (mSkipped) mSkipped.textContent = String(skipped);
 }
 
 function log(line) {
@@ -150,234 +177,18 @@ function clearLog() {
   consoleLog.textContent = "[system] Ready.";
 }
 
-function setFileCount(n) {
+function copyLogToClipboard() {
+  const txt = consoleLog?.textContent || "";
+  if (!txt) return;
+  navigator.clipboard?.writeText(txt).then(
+    () => log("Console copied to clipboard."),
+    () => log("Could not copy console (clipboard blocked).")
+  );
+}
+
+function updateFileCount() {
   if (!fileCount) return;
-  fileCount.textContent = String(clampInt(n, 0, 1_000_000));
-}
-
-
-/* =========================
-   PROCESSING OVERLAY (ANIMATION)
-   ========================= */
-
-const processingOverlay = document.getElementById("processingOverlay");
-const processingTitle = document.getElementById("processingTitle");
-const processingSub = document.getElementById("processingSub");
-const dots = document.getElementById("dots");
-
-let dotsTimer = null;
-
-let __subTypeRunId = 0;
-
-async function typewriterProcessingSub(text) {
-  if (!processingSub) return;
-
-  const runId = ++__subTypeRunId;
-  processingSub.textContent = "";
-
-  const s = String(text);
-
-  for (let i = 0; i < s.length; i++) {
-    // cancel if a new run started
-    if (runId !== __subTypeRunId) return;
-
-    processingSub.textContent += s[i];
-
-    // small natural pauses
-    const ch = s[i];
-    const extra =
-      (ch === "." || ch === "!" || ch === "?" || ch === ",") ? SUB_TYPE_SPEED_MS * 3 :
-      (ch === "\n") ? SUB_TYPE_SPEED_MS * 6 :
-      0;
-
-    await sleep(SUB_TYPE_SPEED_MS + extra);
-  }
-}
-
-function showProcessingOverlay() {
-  if (!processingOverlay) return;
-
-  processingOverlay.classList.remove("hidden");
-  processingOverlay.setAttribute("aria-hidden", "false");
-
-  if (processingTitle && processingTitle.firstChild) {
-  processingTitle.firstChild.nodeValue = "Please, give me some time, processing the files ";}
-
-  typewriterProcessingSub("I'm reading the documents and trying to understand them.");
-
-  // animated dots ( ... )
-  if (dots) {
-    let n = 0;
-    dots.textContent = "...";
-    if (dotsTimer) clearInterval(dotsTimer);
-    dotsTimer = setInterval(() => {
-      n = (n + 1) % 4;
-      dots.textContent = ".".repeat(n) || "";
-    }, 350);
-  }
-}
-
-async function showProcessingSuccess() {
-  if (!processingOverlay) return;
-
-  if (dotsTimer) clearInterval(dotsTimer);
-  dotsTimer = null;
-  if (dots) dots.textContent = "";
-
-  if (processingTitle && processingTitle.firstChild) {
-  processingTitle.firstChild.nodeValue = "Got it, task has been executed successful ";}
-
-  // auto-hide after a short moment
-  await typewriterProcessingSub("Your files were processed and added to my knowledge base.");
-  await sleep(350);
-  hideProcessingOverlay();
-}
-
-function hideProcessingOverlay() {
-
-  __subTypeRunId++; // cancel any running processingSub typewriter
-
-  if (dotsTimer) clearInterval(dotsTimer);
-  dotsTimer = null;
-
-  if (!processingOverlay) return;
-  processingOverlay.classList.add("hidden");
-  processingOverlay.setAttribute("aria-hidden", "true");
-}
-
-
-
-/* =========================
-   7) CHAT UI (AI OPERATOR)
-   ========================= */
-
-function aiAppendBubble(text, type = "ai") {
-  if (!aiChat) return null;
-  const wrap = document.createElement("div");
-  wrap.className = `ai-msg ${type}`;
-  wrap.innerHTML = `<div class="ai-bubble">${escapeHtml(text)}</div>`;
-  aiChat.appendChild(wrap);
-  aiChat.scrollTop = aiChat.scrollHeight;
-  return wrap;
-}
-
-function formatLite(input) {
-  const esc = escapeHtml(String(input));
-
-  let s = esc.replace(/`([^`]+)`/g, "<code>$1</code>");
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
-
-  const lines = s.split(/\r?\n/);
-  let html = "";
-  let inList = false;
-
-  const closeList = () => {
-    if (inList) {
-      html += "</ul>";
-      inList = false;
-    }
-  };
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    const isBullet = /^[-•]\s+/.test(trimmed);
-    if (isBullet) {
-      if (!inList) {
-        closeList();
-        html += "<ul>";
-        inList = true;
-      }
-      html += `<li>${trimmed.replace(/^[-•]\s+/, "")}</li>`;
-      continue;
-    }
-
-    closeList();
-
-    if (trimmed === "") {
-      html += "<p></p>";
-    } else {
-      html += `<p>${line}</p>`;
-    }
-  }
-
-  closeList();
-  return html;
-}
-
-async function typewriterToBubble(el, text) {
-  if (!el) return;
-  const bubble = el.querySelector(".ai-bubble");
-  if (!bubble) return;
-
-  bubble.innerHTML = `<div class="fmt"></div>`;
-  const holder = bubble.querySelector(".fmt");
-  if (!holder) return;
-
-  const tokens = String(text).split(/(\s+)/);
-  let out = "";
-
-  for (let i = 0; i < tokens.length; i++) {
-    out += tokens[i];
-
-    if (i % 4 === 0 || i === tokens.length - 1) {
-      holder.innerHTML = formatLite(out);
-      aiChat.scrollTop = aiChat.scrollHeight;
-    }
-
-    const last = tokens[i] || "";
-    const base = 18 + Math.random() * 40;
-    const punct = /[.!?]\s*$/.test(last) ? 120 : 0;
-    const nl = /\n/.test(last) ? 160 : 0;
-
-    await sleep(base + punct + nl);
-  }
-
-  aiChat.scrollTop = aiChat.scrollHeight;
-}
-
-function aiTypingBubble(show) {
-  if (!aiChat) return null;
-
-  const existing = aiChat.querySelector(".ai-msg.ai-typing");
-  if (existing) existing.remove();
-
-  if (!show) return null;
-
-  const wrap = document.createElement("div");
-  wrap.className = "ai-msg ai ai-typing";
-  wrap.innerHTML = `
-    <div class="ai-bubble">
-      <span class="ai-typing-dots" aria-label="AI is typing">
-        <span></span><span></span><span></span>
-      </span>
-    </div>
-  `;
-
-  aiChat.appendChild(wrap);
-  aiChat.scrollTop = aiChat.scrollHeight;
-  return wrap;
-}
-
-/* =========================
-   8) FILE HANDLING
-   ========================= */
-
-function addFiles(fileListLike) {
-  if (!fileListLike) return;
-
-  const incoming = Array.from(fileListLike).filter((f) => {
-    const isPdf = f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf");
-    return isPdf;
-  });
-
-  if (!incoming.length) {
-    aiAppendBubble("No valid PDFs detected. Please add .pdf files only.");
-    return;
-  }
-
-  selectedFiles = selectedFiles.concat(incoming);
-  renderFileList();
+  fileCount.textContent = `${selectedFiles.length} file${selectedFiles.length === 1 ? "" : "s"}`;
 }
 
 function renderFileList() {
@@ -385,12 +196,15 @@ function renderFileList() {
 
   fileList.innerHTML = "";
 
+  // Empty state
   if (!selectedFiles.length) {
     fileList.innerHTML = `<div class="ai-muted small">No files selected.</div>`;
-    setFileCount(0);
+    updateFileCount(); // or setFileCount(0) if you use that helper
+    setMetrics?.({ files: 0, chunks: Number(mChunks?.textContent || 0), skipped: Number(mSkipped?.textContent || 0) });
     return;
   }
 
+  // Render rows
   selectedFiles.forEach((f, idx) => {
     const row = document.createElement("div");
     row.className = "ai-file";
@@ -408,137 +222,337 @@ function renderFileList() {
     fileList.appendChild(row);
   });
 
-  setFileCount(selectedFiles.length);
+  // Update counts
+  updateFileCount();
+  setMetrics?.({
+    files: selectedFiles.length,
+    chunks: Number(mChunks?.textContent || 0),
+    skipped: Number(mSkipped?.textContent || 0),
+  });
 
+  // Remove handlers (per button)
   fileList.querySelectorAll("button.ai-file-x").forEach((btn) => {
     btn.addEventListener("click", (e) => {
       const i = Number(e.currentTarget.dataset.idx);
       if (!Number.isFinite(i)) return;
+
       selectedFiles.splice(i, 1);
       renderFileList();
     });
   });
 }
 
+
+/* =========================
+   7) PROCESSING OVERLAY (ANIMATION + TEXT)
+   ========================= */
+
+// One line at a time
+const OVERLAY_LINES = [
+  "Okay, Uploading your PDFs to my workspace.. This won't take long!",
+  "Now I'm reading through all the text in your documents. Fascinating stuff!",
+  "Breaking down the contents into small chapters so that i can understand it better.",
+  "Converting everything into a format my AI brain can process. This is where the magic happens!",
+  "Building my knowledge index.. Almost there!",
+  "Perfect I've learned everything from your documents. I'm ready to use this new knowledge.",
+  "Thank you for these interesting new information !",
+];
+
+// SPEED SETTINGS
+// Faster defaults
+const LINE_TYPE_SPEED_MS = 60; // ms per char
+const LINE_GAP_BASE_MS = 210;  // base wait (scaled by PDF count, capped)
+const LINE_FADE_MS = 350;      // should match CSS transition
+
+function initOverlayLottie() {
+  if (overlayLottieLoaded) return;
+  if (!lottieOverlayEl) return;
+  if (typeof window.lottie === "undefined") return;
+
+  const url = lottieOverlayEl.dataset.lottieUrl;
+  if (!url) return;
+
+  overlayLottie = window.lottie.loadAnimation({
+    container: lottieOverlayEl,
+    renderer: "svg",
+    loop: true,
+    autoplay: false,
+    path: url,
+  });
+
+  overlayLottieLoaded = true;
+}
+
+function cancelOverlaySequence() {
+  overlayRunId++;
+
+  if (processingLines) processingLines.innerHTML = "";
+  if (processingSub) processingSub.textContent = "";
+
+  if (dots) dots.textContent = "";
+}
+
+function ensureLinesContainer() {
+  // preferred (fade + remove old line)
+  if (processingLines) return processingLines;
+
+  // legacy fallback (no fade, but only one line is visible)
+  return processingSub;
+}
+
+async function typewriterLine(el, text, runId) {
+  const s = String(text || "");
+  el.textContent = "";
+
+  const caret = document.createElement("span");
+  caret.className = "tw-caret";
+  el.appendChild(caret);
+
+  for (let i = 0; i < s.length; i++) {
+    if (runId !== overlayRunId) return;
+
+    caret.remove();
+    el.append(s[i]);
+    el.appendChild(caret);
+
+    const ch = s[i];
+    const extra = (ch === "." || ch === "!" || ch === "?" || ch === ",") ? LINE_TYPE_SPEED_MS * 3 : 0;
+    await sleep(LINE_TYPE_SPEED_MS + extra);
+  }
+
+  caret.remove();
+}
+
+async function runOverlaySequence(filesCount = 1) {
+  const container = ensureLinesContainer();
+  if (!container) return;
+
+  const runId = ++overlayRunId;
+
+  const useNodes = container === processingLines;
+  if (useNodes) container.innerHTML = "";
+  else container.textContent = "";
+
+  // scale time with PDFs but cap so it doesn't become crazy slow
+  const count = Math.max(1, Number(filesCount) || 1);
+  const gapMs = Math.min(1200, LINE_GAP_BASE_MS * count);
+
+  let currentNode = null;
+
+  for (const line of OVERLAY_LINES) {
+    if (runId !== overlayRunId) return;
+
+    // fade out old node (only if #processingLines exists)
+    if (useNodes && currentNode) {
+      currentNode.classList.remove("show");
+      currentNode.classList.add("hide");
+      await sleep(LINE_FADE_MS);
+      currentNode.remove();
+      currentNode = null;
+    }
+
+    if (useNodes) {
+      const node = document.createElement("div");
+      node.className = "status-line";
+      container.appendChild(node);
+      currentNode = node;
+
+      requestAnimationFrame(() => node.classList.add("show"));
+      await typewriterLine(node, line, runId);
+    } else {
+      // legacy: overwrite the same element (only one line visible)
+      await typewriterLine(container, line, runId);
+    }
+
+    await sleep(gapMs);
+  }
+}
+
+function showProcessingOverlay(filesCount = 1) {
+  if (!processingOverlay) return;
+
+  cancelOverlaySequence();
+
+  // hide legacy title if it exists (you don't want it fixed)
+  if (processingTitle) processingTitle.style.display = "none";
+
+  processingOverlay.classList.remove("hidden");
+  processingOverlay.setAttribute("aria-hidden", "false");
+
+  initOverlayLottie();
+  overlayLottie?.goToAndPlay(0, true);
+
+  runOverlaySequence(filesCount);
+}
+
+async function showProcessingSuccess() {
+  cancelOverlaySequence();
+
+  const container = ensureLinesContainer();
+  if (!container) return hideProcessingOverlay();
+
+  const runId = overlayRunId;
+
+  const msg = "Done. Training complete — I'm ready to answer using your PDFs.";
+
+  if (container === processingLines) {
+    const node = document.createElement("div");
+    node.className = "status-line show";
+    container.appendChild(node);
+    await typewriterLine(node, msg, runId);
+  } else {
+    await typewriterLine(container, msg, runId);
+  }
+
+  await sleep(240);
+  clearFilesAfterSuccess();
+  hideProcessingOverlay();
+}
+
+function clearFilesAfterSuccess() {
+  selectedFiles = [];
+  renderFileList();
+  updateFileCount();
+}
+
+
+function hideProcessingOverlay() {
+  cancelOverlaySequence();
+  overlayLottie?.stop();
+
+  if (!processingOverlay) return;
+  processingOverlay.classList.add("hidden");
+  processingOverlay.setAttribute("aria-hidden", "true");
+}
+
+/* =========================
+   8) FILE HANDLING
+   ========================= */
+
+function isPdf(file) {
+  if (!file) return false;
+  const nameOk = /\.pdf$/i.test(file.name || "");
+  const typeOk = (file.type || "").toLowerCase() === "application/pdf";
+  return nameOk || typeOk;
+}
+
+function fileKey(file) {
+  return `${file.name}::${file.size}::${file.lastModified}`;
+}
+
+function addFiles(fileListLike) {
+  const incoming = Array.from(fileListLike || []).filter(isPdf);
+  if (!incoming.length) {
+    setStatus("Please select PDF files only.", "error");
+    return;
+  }
+
+  const existing = new Set(selectedFiles.map(fileKey));
+  let added = 0;
+
+  for (const f of incoming) {
+    const k = fileKey(f);
+    if (existing.has(k)) continue;
+    selectedFiles.push(f);
+    existing.add(k);
+    added++;
+  }
+
+  renderFileList();
+  updateFileCount();
+  setMetrics({
+    files: selectedFiles.length,
+    chunks: Number(mChunks?.textContent || 0),
+    skipped: Number(mSkipped?.textContent || 0),
+  });
+
+  setStatus(added ? `Added ${added} PDF${added === 1 ? "" : "s"}.` : "These PDFs are already added.", "online");
+}
+
+function clearFiles() {
+  selectedFiles = [];
+  renderFileList();
+  updateFileCount();
+  setMetrics({ files: 0, chunks: 0, skipped: 0 });
+  setProgress(0);
+  setPhase("Idle");
+  setStatus("Ready.", "online");
+  log("Cleared file list.");
+}
+
 /* =========================
    9) UPLOAD / INGEST
    ========================= */
 
+function startSimulatedProgress() {
+  if (progressTimer) clearInterval(progressTimer);
+
+  let p = 5;
+  setProgress(p);
+
+  progressTimer = setInterval(() => {
+    // ease toward 90% while backend works
+    p = Math.min(90, p + Math.max(0.8, (90 - p) * 0.08));
+    setProgress(p);
+  }, 260);
+}
+
+function stopSimulatedProgress(finalPct = 100) {
+  if (progressTimer) clearInterval(progressTimer);
+  progressTimer = null;
+  setProgress(finalPct);
+}
+
 async function uploadAndIngest() {
-
-  let ingestSucceeded = false;
-
   if (!selectedFiles.length) {
-    aiAppendBubble("No PDFs selected. Add files first.");
+    setStatus("No PDFs selected. Add files first.", "error");
+    log("Ingest blocked: no files selected.");
     return;
   }
 
-  uploadBtn?.setAttribute("disabled", "true");
-  clearBtn?.setAttribute("disabled", "true");
-  fileInput?.setAttribute("disabled", "true");
-  dropzone?.setAttribute("aria-disabled", "true");
+  setDisabled(true);
+  setStatus("Training in progress…", "online");
+  setPhase("Uploading & indexing");
+  log(`Starting Training: ${selectedFiles.length} PDF(s).`);
 
-  if (aiMood) aiMood.textContent = "processing";
-
-  setStatus("Uploading PDFs…", "online");
-  setPhase("Upload");
-  setProgress(5);
-  log("Starting training request...");
-
-  aiTypingBubble(true);
-
-  // animation overlay
-  // ✅ ADD THIS
-  showProcessingOverlay();
-  // animation overlay
-
+  showProcessingOverlay(selectedFiles.length);
+  startSimulatedProgress();
 
   try {
-    const formData = new FormData();
-    selectedFiles.forEach((f) => formData.append("files", f, f.name));
+    const form = new FormData();
+    selectedFiles.forEach((f) => form.append("files", f, f.name));
 
-    setProgress(20);
-    log(`Uploading ${selectedFiles.length} file(s) to server...`);
+    const res = await fetch(INGEST_ENDPOINT, { method: "POST", body: form });
 
-    const res = await fetch(INGEST_ENDPOINT, {
-      method: "POST",
-      body: formData,
-    });
-
-    setProgress(60);
+    const ct = res.headers.get("content-type") || "";
+    const data = ct.includes("application/json") ? await res.json() : { message: await res.text() };
 
     if (!res.ok) {
-      let errText = `HTTP ${res.status}`;
-      try {
-        const data = await res.json();
-        errText = data?.error || data?.message || errText;
-      } catch (_) {}
-      throw new Error(errText);
+      const msg = data?.error || data?.message || `Request failed (${res.status})`;
+      throw new Error(msg);
     }
 
-    const data = await res.json().catch(() => ({}));
-    setProgress(95);
-
-    const files = Number.isFinite(Number(data?.files)) ? Number(data.files) : selectedFiles.length;
-    const chunks = Number.isFinite(Number(data?.chunks)) ? Number(data.chunks) : 0;
-    const skipped = Number.isFinite(Number(data?.skipped)) ? Number(data.skipped) : 0;
+    const files = data?.files ?? selectedFiles.length;
+    const chunks = data?.chunks ?? data?.total_chunks ?? 0;
+    const skipped = data?.skipped ?? data?.skipped_chunks ?? 0;
 
     setMetrics({ files, chunks, skipped });
-
-    setStatus("Training complete.", "online");
+    stopSimulatedProgress(100);
     setPhase("Complete");
+    setStatus("Training complete.", "online");
     log("Training complete.");
-    
-    // overlay
-    ingestSucceeded = true;
-    // ✅ ADD THIS
+    log(`Metrics: files=${files}, Chapters=${chunks}, skipped=${skipped}`);
+
     await showProcessingSuccess();
-    // overlay
-
-    log(`Metrics: files=${files}, chunks=${chunks}, skipped=${skipped}`);
-
-    aiTypingBubble(false);
-    const bubble = aiAppendBubble("", "ai");
-    await typewriterToBubble(
-      bubble,
-      `**Training successful ✅**\n- Processed **${files}** file(s)\n- Ready for your next upload`
-    );
-
-    selectedFiles = [];
-    renderFileList();
-    setProgress(100);
   } catch (err) {
-    
-    // overlay animation
-    // ✅ ADD THIS
-    if (!ingestSucceeded) hideProcessingOverlay();
-    // overlay animation
-
-    aiTypingBubble(false);
-
-    setStatus("Error during training.", "error");
-    setPhase("Failed");
-    setProgress(0);
-    log(`ERROR: ${String(err?.message || err)}`);
-
-    const bubble = aiAppendBubble("", "ai");
-    await typewriterToBubble(
-      bubble,
-      `I hit an error talking to the server.\n\n**Reason:** \`${String(err?.message || err)}\`\n\nCheck the console log and try again.`
-    );
+    stopSimulatedProgress(0);
+    setPhase("Error");
+    setStatus("Training failed.", "error");
+    log(`ERROR: ${err?.message || err}`);
+    hideProcessingOverlay();
+    alert(`Ingest failed: ${err?.message || err}`);
   } finally {
-
-    // animation overlay
-    // ✅ ADD THIS (safety in case any path didn’t close it)
-    if (!ingestSucceeded) hideProcessingOverlay();
-    // animation overlay
-
-    uploadBtn?.removeAttribute("disabled");
-    clearBtn?.removeAttribute("disabled");
-    fileInput?.removeAttribute("disabled");
-    dropzone?.removeAttribute("aria-disabled");
-
-    if (aiMood) aiMood.textContent = "online";
+    setDisabled(false);
   }
 }
 
@@ -547,147 +561,104 @@ async function uploadAndIngest() {
    ========================= */
 
 function bindEvents() {
-  // ✅ Guard: prevents duplicate listener attachment (main cause of double file picker)
-  if (window.__medicineAiEventsBound) return;
-  window.__medicineAiEventsBound = true;
+  if (eventsBound) return;
+  eventsBound = true;
 
-  if (dropzone) {
-    // Click opens file picker (once)
-    dropzone.addEventListener("click", (e) => {
-      // If click came from the input (or inside it), do nothing
-      if (fileInput && (e.target === fileInput || fileInput.contains(e.target))) return;
-      e.preventDefault();
-      fileInput?.click();
-    });
+  if (endpointText) endpointText.textContent = INGEST_ENDPOINT;
 
-    // Keyboard support (Enter/Space)
-    dropzone.addEventListener("keydown", (e) => {
-      if (e.key === "Enter" || e.key === " ") {
-        e.preventDefault();
-        fileInput?.click();
-      }
-    });
-
-    dropzone.addEventListener("dragover", (e) => {
-      e.preventDefault();
-      dropzone.classList.add("dragover");
-    });
-
-    dropzone.addEventListener("dragleave", () => {
-      dropzone.classList.remove("dragover");
-    });
-
-    dropzone.addEventListener("drop", (e) => {
-      e.preventDefault();
-      dropzone.classList.remove("dragover");
-      addFiles(e.dataTransfer.files);
-    });
-  }
-
-  // ✅ Always null-check fileInput
-  if (fileInput) {
-    // Prevent bubbling to dropzone which would trigger fileInput.click() again
-    fileInput.addEventListener("click", (e) => e.stopPropagation());
-
-    fileInput.addEventListener("change", (e) => {
-      addFiles(e.target.files);
-      e.target.value = ""; // allows selecting same file again
-    });
-  }
-
-  uploadBtn?.addEventListener("click", uploadAndIngest);
-
-  clearBtn?.addEventListener("click", () => {
-    selectedFiles = [];
-    renderFileList();
-    clearLog();
-    if (aiChat) aiChat.innerHTML = "";
-    aiAppendBubble("Cleared. Ready for new PDFs.");
-    setStatus("Idle. Awaiting PDFs…", "");
-    setPhase("Ready");
-    setProgress(0);
-    setMetrics({ files: 0, chunks: 0, skipped: 0 });
+  on(uploadBtn, "click", (e) => {
+    e.preventDefault();
+    uploadAndIngest();
   });
 
-  copyLogBtn?.addEventListener("click", async () => {
-    const txt = consoleLog?.textContent || "";
-    if (!txt.trim()) return;
+  on(clearBtn, "click", (e) => {
+    e.preventDefault();
+    clearFiles();
+  });
 
-    try {
-      await navigator.clipboard.writeText(txt);
-      log("Copied console log to clipboard.");
-    } catch {
-      try {
-        const ta = document.createElement("textarea");
-        ta.value = txt;
-        ta.style.position = "fixed";
-        ta.style.left = "-9999px";
-        document.body.appendChild(ta);
-        ta.select();
-        document.execCommand("copy");
-        document.body.removeChild(ta);
-        log("Copied console log to clipboard.");
-      } catch {
-        log("Copy failed. Your browser blocked clipboard access.");
-      }
-    }
+  on(copyLogBtn, "click", (e) => {
+    e.preventDefault();
+    copyLogToClipboard();
+  });
+
+  on(dropzone, "click", (e) => {
+    if (e.target === fileInput || fileInput?.contains(e.target)) return;
+    fileInput?.click();
+  });
+
+  on(fileInput, "click", (e) => e.stopPropagation());
+  on(fileInput, "change", (e) => {
+    const files = e.target?.files;
+    if (files?.length) addFiles(files);
+    if (fileInput) fileInput.value = "";
+  });
+
+  on(dropzone, "dragover", (e) => {
+    e.preventDefault();
+    dropzone.classList.add("dragover");
+  });
+
+  on(dropzone, "dragleave", () => dropzone.classList.remove("dragover"));
+
+  on(dropzone, "drop", (e) => {
+    e.preventDefault();
+    dropzone.classList.remove("dragover");
+    const files = e.dataTransfer?.files;
+    if (files?.length) addFiles(files);
   });
 }
 
 /* =========================
-   11) PARTICLES
+   11) PARTICLES (optional)
    ========================= */
 
 function initParticles() {
-  const canvas = document.getElementById("aiParticles");
-  if (!canvas) return;
+  if (!particlesCanvas) return;
 
-  const ctx = canvas.getContext("2d");
+  const ctx = particlesCanvas.getContext("2d");
   if (!ctx) return;
 
-  ctx.fillStyle = "rgba(2,127,15,.45)";
-  ctx.strokeStyle = "rgba(2,127,15,.35)";
+  let w = 0;
+  let h = 0;
+  let rafId = null;
 
-  let w, h;
+  const PARTICLE_FILL = "rgba(2,127,15,.40)";
+  const LINK_STROKE = "rgba(2,127,15,.30)";
+
+  const cfg = { count: 48, maxLinkDist: 115, maxSpeed: 0.35 };
   let particles = [];
 
   function resize() {
-    w = canvas.width = window.innerWidth;
-    h = canvas.height = window.innerHeight;
+    const rect = particlesCanvas.getBoundingClientRect();
+    w = Math.max(1, Math.floor(rect.width));
+    h = Math.max(1, Math.floor(rect.height));
+    particlesCanvas.width = w * devicePixelRatio;
+    particlesCanvas.height = h * devicePixelRatio;
+    ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
   }
 
-  function spawn(count = 80) {
-    particles = [];
-    for (let i = 0; i < count; i++) {
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.35,
-        vy: (Math.random() - 0.5) * 0.35,
-        r: 1 + Math.random() * 1.5,
-      });
-    }
+  function spawn() {
+    particles = Array.from({ length: cfg.count }, () => ({
+      x: Math.random() * w,
+      y: Math.random() * h,
+      vx: (Math.random() - 0.5) * cfg.maxSpeed * 2,
+      vy: (Math.random() - 0.5) * cfg.maxSpeed * 2,
+      r: 1 + Math.random() * 2.2,
+    }));
   }
 
-  function step() {
+  function tick() {
     ctx.clearRect(0, 0, w, h);
 
-    ctx.globalAlpha = 0.65;
     for (const p of particles) {
       p.x += p.vx;
       p.y += p.vy;
-
-      if (p.x < 0) p.x = w;
-      if (p.x > w) p.x = 0;
-      if (p.y < 0) p.y = h;
-      if (p.y > h) p.y = 0;
-
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.fill();
+      if (p.x < 0 || p.x > w) p.vx *= -1;
+      if (p.y < 0 || p.y > h) p.vy *= -1;
     }
 
-    ctx.globalAlpha = 0.12;
+    ctx.strokeStyle = LINK_STROKE;
+    ctx.globalAlpha = 0.15;
     for (let i = 0; i < particles.length; i++) {
       for (let j = i + 1; j < particles.length; j++) {
         const a = particles[i];
@@ -695,7 +666,7 @@ function initParticles() {
         const dx = a.x - b.x;
         const dy = a.y - b.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist < 110) {
+        if (dist < cfg.maxLinkDist) {
           ctx.beginPath();
           ctx.moveTo(a.x, a.y);
           ctx.lineTo(b.x, b.y);
@@ -703,39 +674,51 @@ function initParticles() {
         }
       }
     }
+    ctx.globalAlpha = 1;
 
-    requestAnimationFrame(step);
+    ctx.fillStyle = PARTICLE_FILL;
+    for (const p of particles) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    rafId = requestAnimationFrame(tick);
   }
-
-  window.addEventListener("resize", () => {
-    resize();
-    spawn();
-  });
 
   resize();
   spawn();
-  step();
+  tick();
+
+  const ro = new ResizeObserver(() => {
+    resize();
+    spawn();
+  });
+  ro.observe(particlesCanvas);
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = null;
+    } else if (!rafId) {
+      tick();
+    }
+  });
 }
 
 /* =========================
    12) INIT
    ========================= */
 
-function initUI() {
-  setStatus("Idle. Awaiting PDFs…", "");
-  setPhase("Ready");
-  setProgress(0);
+function init() {
   clearLog();
-
+  updateFileCount();
   setMetrics({ files: 0, chunks: 0, skipped: 0 });
-
-  if (aiChat) aiChat.innerHTML = "";
-  aiAppendBubble("Console online. Drop PDFs and press “Upload & Train.");
-  renderFileList();
+  setProgress(0);
+  setPhase("Idle");
+  setStatus("Ready.", "online");
+  bindEvents();
+  initParticles();
 }
 
-document.addEventListener("DOMContentLoaded", () => {
-  bindEvents();
-  initUI();
-  initParticles();
-});
+document.addEventListener("DOMContentLoaded", init);

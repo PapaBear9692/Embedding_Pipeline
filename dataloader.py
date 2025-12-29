@@ -38,18 +38,20 @@ def extract_usage(text: str) -> str:
 # ---------- DOCUMENT LOADER ----------
 def load_documents():
     """Load PDFs with SimpleDirectoryReader and enrich metadata."""
+    print(f"Loading Uploaded documents...")
     if not PDF_DIR.is_dir():
         raise FileNotFoundError(f"PDF_DIR does not exist: {PDF_DIR}")
 
     reader = SimpleDirectoryReader(
         input_dir=str(PDF_DIR),
-        required_exts=[".pdf"],
+        required_exts=[".pdf", ".doc", ".docx", ".txt"],
         recursive=False,
     )
 
     docs = reader.load_data()
     if not docs:
         raise ValueError(f"No PDF documents found in {PDF_DIR}")
+    print(f"Loaded {len(docs)} documents...")
 
     for d in docs:
         text = d.text or ""

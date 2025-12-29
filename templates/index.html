@@ -49,7 +49,7 @@
 
           <a href="https://verify.squarepharma.com.bd/chat/" class="btn btn-sm ai-btn-outline-pill">
             <i class="bi bi-chat-dots"></i>
-            <span class="d-none d-sm-inline">Back to Chat</span>
+            <span class="d-none d-sm-inline">Chat with me</span>
           </a>
         </div>
 
@@ -65,9 +65,9 @@
             <div class="card-body p-3 p-md-4">
               <div class="d-flex align-items-start justify-content-between gap-3 mb-2">
                 <div>
-                  <h2 class="h4 mb-1 fw-bold">Upload Training PDFs</h2>
+                  <h2 class="h4 mb-1 fw-bold">Training PDFs</h2>
                   <p class="mb-0 ai-muted">
-                    Drop medicine leaflet PDFs here. The Pipeline will train the model.
+                    Drop medicine leaflet PDFs here. I will learn the contents and enrich my knowledge.
                   </p>
                 </div>
               </div>
@@ -119,12 +119,12 @@
               <div class="d-flex align-items-start justify-content-between mb-3">
                 <div>
                   <h2 class="h5 fw-bold mb-1">Training Status</h2>
-                  <div class="ai-muted small">Progress + backend logs.</div>
+                  <!-- <div class="ai-muted small">Progress + backend logs.</div> -->
                 </div>
                 <span class="ai-dot" id="statusDot" aria-hidden="true"></span>
               </div>
 
-              <div class="mb-2 fw-semibold" id="statusText">Idle. Awaiting PDFs…</div>
+              <div class="mb-2 fw-semibold" id="statusText">Progress…</div>
 
               <div class="progress ai-progress mb-2" role="progressbar" aria-label="progress">
                 <div id="progressBar" class="progress-bar ai-progressbar" style="width: 0%"></div>
@@ -144,7 +144,7 @@
                 </div>
                 <div class="col-4">
                   <div class="ai-metric">
-                    <div class="ai-metric-k">Chunks</div>
+                    <div class="ai-metric-k">Chapters</div>
                     <div class="ai-metric-v" id="mChunks">0</div>
                   </div>
                 </div>
@@ -156,16 +156,8 @@
                 </div>
               </div>
 
-              <div class="ai-replies mb-3">
-                <div class="d-flex align-items-center justify-content-between mb-2">
-                  <div class="fw-semibold">AI Operator</div>
-                  <span class="badge rounded-pill ai-badge-soft" id="aiMood">online</span>
-                </div>
-                <div id="aiChat" class="ai-chat"></div>
-              </div>
-
               <div class="d-flex align-items-center justify-content-between mb-2">
-                <div class="fw-semibold">Console</div>
+                <div class="fw-semibold">Steps</div>
                 <button id="copyLogBtn" class="btn btn-sm ai-btn-outline-pill" type="button">
                   <i class="bi bi-clipboard"></i> Copy
                 </button>
@@ -188,57 +180,22 @@
   <div id="processingOverlay" class="overlay hidden" aria-hidden="true">
     <div class="overlay-card" role="status" aria-live="polite">
       <!-- Simple inline SVG "chatbot reading a book" animation -->
+      <!-- Lottie animation container (replaces inline SVG) -->
       <div class="bot-wrap">
-        <svg class="bot-svg" viewBox="0 0 320 220" xmlns="http://www.w3.org/2000/svg">
-          <!-- Shadow -->
-          <ellipse cx="160" cy="200" rx="90" ry="14" fill="rgba(0,0,0,0.12)"/>
-
-          <!-- Book -->
-          <g class="book">
-            <path d="M75 140 Q120 120 160 140 Q200 120 245 140 L245 190 Q200 170 160 190 Q120 170 75 190 Z"
-                  fill="#f3f4f6" stroke="#cbd5e1" stroke-width="3"/>
-            <path d="M160 140 L160 190" stroke="#cbd5e1" stroke-width="3"/>
-            <!-- Pages -->
-            <path class="page page1" d="M95 150 Q125 140 155 150" stroke="#94a3b8" stroke-width="3" fill="none"/>
-            <path class="page page2" d="M95 163 Q125 153 155 163" stroke="#94a3b8" stroke-width="3" fill="none"/>
-            <path class="page page3" d="M165 150 Q195 140 225 150" stroke="#94a3b8" stroke-width="3" fill="none"/>
-            <path class="page page4" d="M165 163 Q195 153 225 163" stroke="#94a3b8" stroke-width="3" fill="none"/>
-          </g>
-
-          <!-- Bot Body -->
-          <g class="bot">
-            <rect x="110" y="70" width="100" height="90" rx="20" fill="#e0f2fe" stroke="#0284c7" stroke-width="4"/>
-            <rect x="125" y="85" width="70" height="40" rx="12" fill="#ffffff" stroke="#7dd3fc" stroke-width="3"/>
-
-            <!-- Eyes (blink) -->
-            <circle class="eye eyeL" cx="150" cy="105" r="6" fill="#0f172a"/>
-            <circle class="eye eyeR" cx="170" cy="105" r="6" fill="#0f172a"/>
-
-            <!-- Mouth -->
-            <path d="M150 122 Q160 130 170 122" stroke="#0f172a" stroke-width="3" fill="none" stroke-linecap="round"/>
-
-            <!-- Antenna -->
-            <line x1="160" y1="70" x2="160" y2="50" stroke="#0284c7" stroke-width="4" stroke-linecap="round"/>
-            <circle class="antennaDot" cx="160" cy="46" r="6" fill="#38bdf8"/>
-
-            <!-- Arms -->
-            <path d="M110 115 Q90 125 88 145" stroke="#0284c7" stroke-width="5" fill="none" stroke-linecap="round"/>
-            <path d="M210 115 Q230 125 232 145" stroke="#0284c7" stroke-width="5" fill="none" stroke-linecap="round"/>
-          </g>
-
-          <!-- Little "thinking" dots -->
-          <g class="thoughts" fill="#38bdf8">
-            <circle class="tDot t1" cx="235" cy="60" r="5"/>
-            <circle class="tDot t2" cx="255" cy="45" r="4"/>
-            <circle class="tDot t3" cx="275" cy="35" r="3"/>
-          </g>
-        </svg>
+        <div
+          id="lottieOverlayAnim"
+          class="lottie-anim"
+          data-lottie-url="{{ url_for('static', filename='animation/animation.json') }}"
+          aria-hidden="true"
+        ></div>
       </div>
 
       <div class="status-text">
-        <div id="processingTitle" class="status-title">Please, give me some time, processing the files<span id="dots">...</span></div>
-        <div id="processingSub" class="status-sub">I'm reading your documents and trying to understand them.</div>
+        <!-- NEW: multi-line status area (no fixed title/dots anymore) -->
+        <div id="processingLines" class="status-lines" aria-label="Processing steps"></div>
       </div>
+
+
     </div>
   </div>
   <!-- /Processing Overlay (hidden by default) -->
@@ -249,6 +206,9 @@
     integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
     crossorigin="anonymous"
   ></script>
+
+  <!-- Lottie Web Library -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/lottie-web/5.12.2/lottie.min.js"></script>
 
   <!-- Custom JS -->
   <script src="{{ url_for('static', filename='js/main.js') }}"></script>

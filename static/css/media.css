@@ -79,8 +79,12 @@
   .overlay-card{
     padding: 12px;
   }
-  .bot-svg{
-    width: 150px; /* keep it compact */
+  .lottie-anim{
+  /* width: 150px; keep it compact */
+  /* height: 150px; */
+
+  width: 180px;
+  height: 180px;
   }
   .status-title{
     font-size: 15px;

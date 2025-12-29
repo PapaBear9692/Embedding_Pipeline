@@ -14,6 +14,7 @@ def allowed_file(filename: str) -> bool:
     return ext in ALLOWED_EXTENSIONS
 
 def create_app():
+    print("Starting Flask app...")
     app = Flask(__name__)
 
     # Optional: limit upload size (e.g., 50MB total request)
@@ -23,15 +24,18 @@ def create_app():
 
     @app.get("/")
     def home():
+        print("Rendering home page...")
         return render_template("index.html")
 
     @app.post("/api/ingest")
     def ingest():
+        print("Received ingest request...")
         # Frontend sends "files" (multiple)
         if "files" not in request.files:
             return jsonify({"error": "No files field in form-data (expected key: files)"}), 400
 
         files = request.files.getlist("files")
+        print(f"Files received: {len(files)}")
         if not files:
             return jsonify({"error": "No files received"}), 400
 
@@ -67,7 +71,7 @@ def create_app():
 
         except Exception as e:
             return jsonify({"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}), 500
-
+        print("Training complete.")
         return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
 
     return app
@@ -75,4 +79,4 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     app.run(debug=False)
-    # app.run(host="0.0.0.0", port=5000, debug=True)
+    #app.run(host="127.0.0.1", port=5000, debug=True)
