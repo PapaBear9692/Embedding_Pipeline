@@ -13,7 +13,7 @@ from app_config import init_settings_and_storage
 def update_list(storage_context, documents):
     vector_store = storage_context.vector_store
     pinecone_index = vector_store._pinecone_index
-    node_id = "3f32be6a-da67-42b8-8e7c-160ac8fe4c09#6236bdd4-5ab3-477f-bd81-9e17d97f3de5"
+    node_id = "Prime_Node"
 
     # 1) collect product names from filenames (remove .pdf)
     new_items = [
