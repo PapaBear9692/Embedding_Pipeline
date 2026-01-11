@@ -8,6 +8,7 @@ from llama_index.core import Settings
 
 from dataloader import load_documents
 from app_config import init_settings_and_storage
+from ocr import run_ocr
 
 
 def update_list(storage_context, documents):
@@ -86,6 +87,7 @@ def cleanup_train_data():
 
 def build_index() -> Optional[Tuple[VectorStoreIndex, int]]:
     print("Building index...")
+    run_ocr()
     documents = load_documents()
     if not documents:
         return None
