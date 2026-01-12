@@ -12,5 +12,4 @@ embedenv
 __pycache__/app_config.cpython-311.pyc
 __pycache__/app_config.cpython-311.pyc
 
-
-/secrets/*
+required_files/gcp-credentials.json
