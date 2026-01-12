@@ -5,7 +5,7 @@ from werkzeug.utils import secure_filename
 from upsert import build_index  # calls your existing pipeline
 
 ROOT_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = ROOT_DIR / "ocr"
+UPLOAD_DIR = ROOT_DIR / "data"
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 

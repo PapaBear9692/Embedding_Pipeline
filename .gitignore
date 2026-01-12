@@ -1,15 +1,15 @@
 .env
-__pycache__
-__pycache__/*
-
-/data/*.pdf
 
 embedenv
-
-/embedenv
-
 /embedenv/*
+
+__pycache__
+__pycache__/*
+__pycache__/prime_node.cpython-311.pyc
+__pycache__/ocr.cpython-311.pyc
 __pycache__/app_config.cpython-311.pyc
-__pycache__/app_config.cpython-311.pyc
+__pycache__/dataloader.cpython-311.pyc
+__pycache__/upsert.cpython-311.pyc
 
 required_files/gcp-credentials.json
+

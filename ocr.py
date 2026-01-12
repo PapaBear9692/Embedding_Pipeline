@@ -50,7 +50,7 @@ from reportlab.platypus import Preformatted
 ROOT_DIR = Path(__file__).resolve().parent
 ENV_PATH = ROOT_DIR / ".env"
 
-IN_DIR = ROOT_DIR / "ocr"
+IN_DIR = ROOT_DIR / "data"
 OUT_DIR = ROOT_DIR / "data" / "train_data"
 
 
