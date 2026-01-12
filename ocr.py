@@ -455,7 +455,7 @@ def run_ocr() -> None:
             print("Extracted text length:", len(text))
             print("Extracted preview:", repr(text[:200]))
 
-            out_pdf = OUT_DIR / f"{pdf_path.stem}.ocr.pdf"
+            out_pdf = OUT_DIR / f"{pdf_path.stem}.pdf"
             _export_text_as_readable_pdf(pdf_path.stem, text, out_pdf)
 
             print(f"Saved JSON: {json_out}")
