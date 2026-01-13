@@ -214,6 +214,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type.upper()} {ch}] listing failed: {e}")
             finally:
                 c.sleep()
+                time.sleep(15)  # extra delay between listing pages
 
         all_product_urls = sorted(all_product_urls)
         total_pages += len(all_product_urls)
@@ -248,7 +249,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 out_path = unique_path(PDF_DIR / desired_name)
 
                 record = {
-                    "type": prod_type,  # ✅ distinguish pharma vs herbal
+                    "type": prod_type,  # distinguish pharma vs herbal
                     "product_name": product_name,
                     "product_url": purl,
                     "pdf_url": pdf_url,
@@ -268,7 +269,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 c.download_file(pdf_url, out_path)
                 record["downloaded"] = True
                 save_state(state)
-
+                
                 new_downloads += 1
                 print(f"[{prod_type} {i}/{len(all_product_urls)}] DOWNLOADED: {product_name} -> {out_path.name} (orig: {original_pdf_filename})")
 
@@ -279,6 +280,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type} {i}/{len(all_product_urls)}] product failed: {purl} :: {e}")
             finally:
                 c.sleep()
+                time.sleep(15)  # extra delay between downloads
 
     state["items"] = items
     state["failures"] = failures
