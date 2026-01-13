@@ -47,9 +47,19 @@
         <div class="header-right">
           <img src="{{ url_for('static', filename='img/logo2.png') }}" alt="Square Group" class="second-logo">
 
-          <a href="https://verify.squarepharma.com.bd/chat/" class="btn btn-sm ai-btn-outline-pill">
+          <!-- <a href="https://verify.squarepharma.com.bd/chat/" class="btn btn-sm ai-btn-outline-pill">
             <i class="bi bi-chat-dots"></i>
             <span class="d-none d-sm-inline">Chat with me</span>
+          </a> -->
+          <a
+            href="https://verify.squarepharma.com.bd/chat/"
+            class="btn btn-sm ai-btn-outline-pill"
+            id="chatLink"
+            data-bs-toggle="modal"
+            data-bs-target="#chatConfirmModal"
+          >
+            <i class="bi bi-chat-dots"></i>
+            <span class="d-none d-sm-inline">Train from website</span>
           </a>
         </div>
 
@@ -205,6 +215,33 @@
     </div>
   </div>
   <!-- /Processing Overlay (hidden by default) -->
+
+  
+  <!-- Chat confirmation modal -->
+  <div class="modal fade" id="chatConfirmModal" tabindex="-1" aria-hidden="true" aria-labelledby="chatConfirmModalLabel">
+    <div class="modal-dialog modal-dialog-centered">
+      <div class="modal-content">
+
+        <div class="modal-header">
+          <h5 class="modal-title fw-semibold" id="chatConfirmModalLabel">Confirm</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+
+        <div class="modal-body">
+          Are you sure to execute this process ?
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">No</button>
+          <button type="button" class="btn btn-success" id="chatConfirmYesBtn">Yes</button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <!-- /Chat confirmation modal -->
+
+
 
   <!-- Bootstrap bundle -->
   <script

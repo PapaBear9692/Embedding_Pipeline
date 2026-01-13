@@ -624,6 +624,30 @@ function bindEvents() {
     const files = e.dataTransfer?.files;
     if (files?.length) addFiles(files);
   });
+
+  // Chat confirmation modal behavior
+  const chatLink = document.getElementById("chatLink");
+  const chatYesBtn = document.getElementById("chatConfirmYesBtn");
+
+  if (chatLink) {
+    chatLink.addEventListener("click", (e) => {
+      // prevent direct navigation; modal will open
+      e.preventDefault();
+    });
+  }
+
+  if (chatYesBtn && chatLink) {
+    chatYesBtn.addEventListener("click", () => {
+      const url = chatLink.getAttribute("href");
+      // close modal first
+      const modalEl = document.getElementById("chatConfirmModal");
+      const modalInstance = window.bootstrap?.Modal.getInstance(modalEl);
+      modalInstance?.hide();
+
+      // then open the link (same tab)
+      window.open(url, "_blank", "noopener");
+    });
+  }
 }
 
 /* =========================
