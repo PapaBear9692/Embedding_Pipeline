@@ -15,6 +15,8 @@
 
 const API_BASE = ""; // keep "" when same origin
 const INGEST_ENDPOINT = `${API_BASE}/api/train`;
+const CRAWL_ENDPOINT = `${API_BASE}/api/crawl`;
+
 
 /* =========================
    2) DOM HELPERS
@@ -535,7 +537,9 @@ async function uploadAndIngest() {
 
   showProcessingOverlay(selectedFiles.length);
   startSimulatedProgress();
-
+  
+  
+  //Ingest
   try {
     const form = new FormData();
     selectedFiles.forEach((f) => form.append("files", f, f.name));
@@ -573,6 +577,50 @@ async function uploadAndIngest() {
     setDisabled(false);
   }
 }
+
+//Crawl
+async function runCrawl() {
+  setDisabled(true);
+  setStatus("Auto training in progress…", "online");
+  setPhase("Auto Trainig From Website");
+  log("Starting auto-download and training…");
+
+
+  setProgress(10);
+
+  try {
+    const res = await fetch(CRAWL_ENDPOINT, { method: "POST" });
+    setProgress(25);
+    const ct = res.headers.get("content-type") || "";
+    const data = ct.includes("application/json") ? await res.json() : { message: await res.text() };
+    setProgress(90);
+    if (!res.ok) {
+      const msg = data?.error || data?.message || `Request failed (${res.status})`;
+      throw new Error(msg);
+    }
+
+    const files = data?.files ?? 0;
+    const chunks = data?.chunks ?? 0;
+    const skipped = data?.skipped ?? 0;
+
+    setMetrics({ files, chunks, skipped });
+    setProgress(100);
+    setPhase("Complete");
+    setStatus("Auto Training complete.", "online");
+    log("Auto Training complete.");
+    log(`Metrics: files=${files}, Chapters=${chunks}, skipped=${skipped}`);
+
+  } catch (err) {
+    setProgress(0);
+    setPhase("Error");
+    setStatus("Training failed.", "error");
+    log(`ERROR: ${err?.message || err}`);
+    alert(`Auto Download and Training stopped: ${err?.message || err}`);
+  } finally {
+    setDisabled(false);
+  }
+}
+
 
 /* =========================
    10) EVENTS
@@ -637,15 +685,16 @@ function bindEvents() {
   }
 
   if (chatYesBtn && chatLink) {
-    chatYesBtn.addEventListener("click", () => {
-      const url = chatLink.getAttribute("href");
+    chatYesBtn.addEventListener("click", async () => {
+      
       // close modal first
       const modalEl = document.getElementById("chatConfirmModal");
       const modalInstance = window.bootstrap?.Modal.getInstance(modalEl);
       modalInstance?.hide();
 
-      // then open the link (same tab)
-      window.open(url, "_blank", "noopener");
+      // call backend crawl endpoint
+      await runCrawl();
+      //window.open(url, "_blank", "noopener");
     });
   }
 }

@@ -233,7 +233,6 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
     doc.build(flow)
 
 
-
 # -----------------------------
 # JSON-first extraction (Layout Parser)
 # -----------------------------
@@ -390,6 +389,7 @@ def _process_pdf_bytes(client, processor, pdf_bytes: bytes) -> documentai_v1.Doc
     result = client.process_document(request=req)
     return result.document
 
+
 def _cleanup_ocr_inputs(in_dir: Path) -> None:
     """Delete all PDF files from the OCR input folder."""
     for p in in_dir.iterdir():
@@ -411,6 +411,18 @@ def _cleanup_train_json(train_dir: Path) -> None:
 
 
 # -----------------------------
+# ADD: Move .txt and .docx to OUT_DIR before OCR starts
+# -----------------------------
+def _move_txt_docx_inputs(in_dir: Path, out_dir: Path) -> None:
+    for p in in_dir.iterdir():
+        if p.is_file() and p.suffix.lower() in {".txt", ".docx"}:
+            try:
+                p.replace(out_dir / p.name)
+            except Exception as e:
+                print(f"WARNING: failed to move {p.name}: {e}")
+
+
+# -----------------------------
 # Main
 # -----------------------------
 def run_ocr() -> None:
@@ -421,6 +433,9 @@ def run_ocr() -> None:
 
     IN_DIR.mkdir(parents=True, exist_ok=True)
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    # move txt/docx straight to train_data before OCR
+    _move_txt_docx_inputs(IN_DIR, OUT_DIR)
 
     pdfs = sorted([p for p in IN_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"])
     if not pdfs:
@@ -469,6 +484,5 @@ def run_ocr() -> None:
     _cleanup_train_json(OUT_DIR)
 
 
-    
 if __name__ == "__main__":
     run_ocr()

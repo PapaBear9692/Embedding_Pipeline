@@ -11,5 +11,5 @@ __pycache__/app_config.cpython-311.pyc
 __pycache__/dataloader.cpython-311.pyc
 __pycache__/upsert.cpython-311.pyc
 
-required_files/gcp-credentials.json
 
+save/gcp-credentials.json

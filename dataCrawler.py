@@ -16,10 +16,10 @@ from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_excep
 BASE_LISTING_URL = "https://www.squarepharma.com.bd/products-by-tradename.php"
 PRODUCT_URL_RE = re.compile(r"product-details\.php\?pid=\d+", re.IGNORECASE)
 
-CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("B") + 1)]
+CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
 
-# ✅ Run BOTH "pharma" and "herbal" in one execution
-RUN_TYPES = ["pharma", "herbal"]  # (site types: pharma | herbal | agrovet)
+# Run BOTH "pharma" and "herbal" in one execution
+RUN_TYPES = ["pharma", "herbal" ]  # (site types: pharma | herbal | agrovet) 
 
 ROOT_DIR = Path(__file__).resolve().parent
 PDF_DIR = ROOT_DIR / "data"
@@ -85,7 +85,7 @@ def extract_product_name(soup: BeautifulSoup) -> str:
 
 def extract_prescribing_pdf_url(page_url: str, soup: BeautifulSoup) -> str:
     # Prefer the “View Prescribing Details” link
-    a = soup.find("a", string=lambda t: t and "Prescribing" in t)
+    a = soup.find("a", string=lambda t: t and "Prescribing" in t) # type: ignore
     if a and a.get("href"):
         href = a["href"].strip()
         if href.lower().endswith(".pdf"):
@@ -93,7 +93,7 @@ def extract_prescribing_pdf_url(page_url: str, soup: BeautifulSoup) -> str:
 
     # Fallback: any PDF inside downloads/
     for a in soup.select('a[href*="downloads/"]'):
-        href = (a.get("href") or "").strip()
+        href = (a.get("href") or "").strip() # type: ignore
         if href.lower().endswith(".pdf"):
             return urljoin(page_url, href)
 
@@ -103,7 +103,7 @@ def extract_product_links(listing_page_url: str, html: str) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
     links = set()
     for a in soup.select("a[href]"):
-        href = (a.get("href") or "").strip()
+        href = (a.get("href") or "").strip() # type: ignore
         if href and PRODUCT_URL_RE.search(href):
             links.add(urljoin(listing_page_url, href))
     return sorted(links)

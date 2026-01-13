@@ -1,13 +1,19 @@
 import os
+import threading
 from pathlib import Path
 from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
+from dataCrawler import PDF_DIR, dataCrawler
 from upsert import build_index  # calls your existing pipeline
+
 
 ROOT_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = ROOT_DIR / "data"
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+_embed_lock = threading.Lock()
+
 
 def allowed_file(filename: str) -> bool:
     ext = Path(filename).suffix.lower()
@@ -75,7 +81,59 @@ def create_app():
         print("Training complete.")
         return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
 
+    @app.post("/api/crawl")
+    def embed_from_crawl():
+        # Prevent overlapping runs
+        if not _embed_lock.acquire(blocking=False):
+            return jsonify({"error": "Embedding pipeline already running"}), 409
+
+        saved = 0
+        skipped = 0
+        chunk_count = 0
+
+        try:
+            PDF_DIR.mkdir(parents=True, exist_ok=True)
+
+            # count PDFs before
+            before_pdfs = {p.name for p in PDF_DIR.glob("*.pdf")}
+
+            # 1) auto-download into /data
+            dataCrawler()
+
+            # count PDFs after -> compute "saved" as new files
+            after_pdfs = {p.name for p in PDF_DIR.glob("*.pdf")}
+            saved = len(after_pdfs - before_pdfs)
+
+            if saved == 0:
+                # match ingest() behavior (400 when nothing valid to process)
+                return jsonify({
+                    "error": "No New PDF files to ingest",
+                    "files": 0,
+                    "chunks": 0,
+                    "skipped": skipped
+                }), 400
+
+            # 2) embed/build index
+            result = build_index()
+            if result is None:
+                chunk_count = 0
+            else:
+                index, chunk_count = result
+
+            return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
+
+        except Exception as e:
+            return jsonify({"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}), 500
+
+        finally:
+            _embed_lock.release()
+
+
     return app
+
+
+
+
 
 if __name__ == "__main__":
     app = create_app()
