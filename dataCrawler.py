@@ -1,4 +1,6 @@
 import re
+import subprocess
+import sys
 import json
 import time
 import unicodedata
@@ -8,6 +10,8 @@ from urllib.parse import urljoin, urlparse, unquote
 import requests
 from bs4 import BeautifulSoup
 from tenacity import retry, stop_after_attempt, wait_exponential, retry_if_exception_type
+
+from upsert import build_index
 
 
 # -----------------------
@@ -296,3 +300,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
 
 if __name__ == "__main__":
     dataCrawler()
+    subprocess.run(
+        [sys.executable, "upsert.py"],
+        check=True
+    )
