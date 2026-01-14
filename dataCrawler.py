@@ -17,13 +17,17 @@ from upsert import build_index
 # -----------------------
 # CONFIG
 # -----------------------
-BASE_LISTING_URL = "https://www.squarepharma.com.bd/products-by-tradename.php"
+#BASE_LISTING_URL = "https://www.squarepharma.com.bd/products-by-tradename.php"
+BASE_LISTING_URLS = {
+    "pharma": "https://www.squarepharma.com.bd/products-by-tradename.php",
+    "herbal": "https://www.squarepharma.com.bd/products-by-tradename-herbal-nutraceuticals.php",
+}
 PRODUCT_URL_RE = re.compile(r"product-details\.php\?pid=\d+", re.IGNORECASE)
 
 CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
 
 # Run BOTH "pharma" and "herbal" in one execution
-RUN_TYPES = ["pharma", "herbal" ]  # (site types: pharma | herbal | agrovet) 
+RUN_TYPES = ["herbal"]  # "pharma", "herbal"  (site types: pharma | herbal | agrovet) 
 
 ROOT_DIR = Path(__file__).resolve().parent
 PDF_DIR = ROOT_DIR / "data"
@@ -41,8 +45,14 @@ UA = "Mozilla/5.0 (compatible; SquarePharmaPDFDownloader/1.2)"
 def clean_text(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
+# def listing_url(prod_type: str, ch: str) -> str:
+#     return f"{BASE_LISTING_URL}?type={prod_type}&char={ch}"
+
 def listing_url(prod_type: str, ch: str) -> str:
-    return f"{BASE_LISTING_URL}?type={prod_type}&char={ch}"
+    base = BASE_LISTING_URLS.get(prod_type)
+    if not base:
+        raise ValueError(f"Unknown product type: {prod_type}")
+    return f"{base}?type={prod_type}&char={ch}"
 
 def sanitize_windows_filename(name: str, max_len: int = 140) -> str:
     name = clean_text(name)
@@ -110,7 +120,7 @@ def extract_product_links(listing_page_url: str, html: str) -> list[str]:
         href = (a.get("href") or "").strip() # type: ignore
         if href and PRODUCT_URL_RE.search(href):
             links.add(urljoin(listing_page_url, href))
-    return sorted(links)
+    return list(links)
 
 def pdf_basename_from_url(pdf_url: str) -> str:
     p = urlparse(pdf_url)
@@ -189,7 +199,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
     items = state.get("items", [])
     failures = state.get("failures", [])
 
-    # ✅ Uniqueness is GLOBAL across pharma+herbal (based on original PDF filename)
+    # Uniqueness is GLOBAL across pharma+herbal (based on original PDF filename)
     seen_original_pdfs = set()
     for it in items:
         op = (it.get("original_pdf_filename") or "").strip()
@@ -218,7 +228,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type.upper()} {ch}] listing failed: {e}")
             finally:
                 c.sleep()
-                time.sleep(15)  # extra delay between listing pages
+                time.sleep(1)  # extra delay between listing pages
 
         all_product_urls = sorted(all_product_urls)
         total_pages += len(all_product_urls)
@@ -284,7 +294,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type} {i}/{len(all_product_urls)}] product failed: {purl} :: {e}")
             finally:
                 c.sleep()
-                time.sleep(15)  # extra delay between downloads
+                time.sleep(2)  # extra delay between downloads
 
     state["items"] = items
     state["failures"] = failures
