@@ -27,7 +27,7 @@ PRODUCT_URL_RE = re.compile(r"product-details\.php\?pid=\d+", re.IGNORECASE)
 CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
 
 # Run BOTH "pharma" and "herbal" in one execution
-RUN_TYPES = ["herbal"]  # "pharma", "herbal"  (site types: pharma | herbal | agrovet) 
+RUN_TYPES = ["pharma", "herbal"]  #   (site types: pharma | herbal | agrovet) 
 
 ROOT_DIR = Path(__file__).resolve().parent
 PDF_DIR = ROOT_DIR / "data"
