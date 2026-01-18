@@ -650,4 +650,10 @@ body{
     0%, 100% { transform: translateY(0); opacity: 0.25; }
     50% { transform: translateY(-6px); opacity: 1; }
   }
+
+  #trainTypeError {
+    margin-left: 0.25rem;
+  }
+
+
   /*====================== Overlay CSS ================= */

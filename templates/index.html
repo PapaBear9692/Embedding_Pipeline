@@ -101,20 +101,46 @@
                 </div>
               </div>
 
-              <div class="d-flex flex-wrap gap-2 align-items-center mt-3">
-                <button id="uploadBtn" class="btn ai-btn-brand" type="button">
-                  <i class="bi bi-stars"></i> Upload & Train
-                </button>
+              <div class="row mt-3">
+                <div class="col-12">
+                  <div class="d-flex align-items-center justify-content-between gap-2 flex-wrap">
 
-                <button id="clearBtn" class="btn ai-btn-outline-pill" type="button">
-                  <i class="bi bi-x-circle"></i> Clear all
-                </button>
+                    <!-- Left side group -->
+                    <div class="d-flex align-items-center gap-2 flex-wrap">
+                      <button id="uploadBtn" class="btn ai-btn-brand" type="button">
+                        <i class="bi bi-stars"></i> Upload & Train
+                      </button>
 
-                <!-- <div class="ms-0 ms-md-auto small ai-muted">
-                  Endpoint:
-                  <code class="ai-code d-inline-block mt-1 mt-md-0" id="endpointText">/api/ingest</code>
-                </div> -->
+                      <div class="dropdown">
+                        <button
+                          class="btn ai-btn-outline-pill dropdown-toggle"
+                          type="button"
+                          id="trainingTypeDropdown"
+                          data-bs-toggle="dropdown"
+                          aria-expanded="false"
+                        >
+                          <i class="bi bi-sliders"></i> Select Type
+                        </button>
+
+                        <ul class="dropdown-menu" aria-labelledby="trainingTypeDropdown">
+                          <li><a class="dropdown-item" href="#" data-train-type="pharma">Pharma</a></li>
+                          <li><a class="dropdown-item" href="#" data-train-type="herbal">Herbal</a></li>
+                        </ul>
+                      </div>
+                    </div>
+
+                    <!-- Right side -->
+                    <button id="clearBtn" class="btn ai-btn-outline-pill ms-auto" type="button">
+                      <i class="bi bi-x-circle"></i> Clear all
+                    </button>
+
+                  </div>
+                </div>
               </div>
+              <div id="trainTypeError" class="text-danger small mt-2 d-none">
+                Please Select a product type first.
+              </div>
+
 
               <hr class="ai-hr my-3 my-md-4">
 

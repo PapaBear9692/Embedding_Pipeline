@@ -17,7 +17,6 @@ const API_BASE = ""; // keep "" when same origin
 const INGEST_ENDPOINT = `${API_BASE}/api/train`;
 const CRAWL_ENDPOINT = `${API_BASE}/api/crawl`;
 
-
 /* =========================
    2) DOM HELPERS
    ========================= */
@@ -55,6 +54,13 @@ const uploadBtn = $("#uploadBtn");
 const clearBtn = $("#clearBtn");
 const copyLogBtn = $("#copyLogBtn");
 
+// NEW: dropdown references
+const trainingTypeDropdown = $("#trainingTypeDropdown");
+const trainingTypeItems = document.querySelectorAll("[data-train-type]");
+
+// NEW: inline error message under Train button
+const trainTypeError = $("#trainTypeError");
+
 // Console log area
 const consoleLog = $("#consoleLog");
 
@@ -89,6 +95,9 @@ let overlayLottieLoaded = false;
 
 // Overlay sequencing
 let overlayRunId = 0;
+
+// NEW: training type state
+let selectedTrainType = "";
 
 /* =========================
    5) SMALL UTILITIES
@@ -134,6 +143,34 @@ function setDisabled(disabled) {
   if (clearBtn) clearBtn.disabled = d;
   if (fileInput) fileInput.disabled = d;
   if (dropzone) dropzone.setAttribute("aria-disabled", d ? "true" : "false");
+}
+
+// Dropdown label helper
+function setTrainingTypeLabel(type) {
+  const t = String(type || "").toLowerCase();
+  const label = t === "herbal" ? "Herbal" : t === "pharma" ? "Pharma" : "Select Type";
+
+  if (trainingTypeDropdown) {
+    trainingTypeDropdown.innerHTML = `<i class="bi bi-sliders"></i> ${label}`;
+  }
+}
+
+// NEW: reset training type to default
+function resetTrainingType() {
+  selectedTrainType = "";
+  setTrainingTypeLabel("");
+  hideTrainTypeError();
+}
+
+// NEW: show/hide red message under Train button
+function showTrainTypeError() {
+  if (!trainTypeError) return;
+  trainTypeError.classList.remove("d-none");
+}
+
+function hideTrainTypeError() {
+  if (!trainTypeError) return;
+  trainTypeError.classList.add("d-none");
 }
 
 /* =========================
@@ -201,8 +238,11 @@ function renderFileList() {
   // Empty state
   if (!selectedFiles.length) {
     fileList.innerHTML = `<div class="ai-muted small">No files selected.</div>`;
-    // or setFileCount(0) if you use that helper
-    setMetrics?.({ files: Number(mFiles?.textContent || 0), chunks: Number(mChunks?.textContent || 0), skipped: Number(mSkipped?.textContent || 0) });
+    setMetrics?.({
+      files: Number(mFiles?.textContent || 0),
+      chunks: Number(mChunks?.textContent || 0),
+      skipped: Number(mSkipped?.textContent || 0),
+    });
     return;
   }
 
@@ -244,7 +284,6 @@ function renderFileList() {
   });
 }
 
-
 /* =========================
    7) PROCESSING OVERLAY (ANIMATION + TEXT)
    ========================= */
@@ -261,10 +300,9 @@ const OVERLAY_LINES = [
 ];
 
 // SPEED SETTINGS
-// Faster defaults
 const LINE_TYPE_SPEED_MS = 60; // ms per char
-const LINE_GAP_BASE_MS = 210;  // base wait (scaled by PDF count, capped)
-const LINE_FADE_MS = 350;      // should match CSS transition
+const LINE_GAP_BASE_MS = 210; // base wait (scaled by PDF count, capped)
+const LINE_FADE_MS = 350; // should match CSS transition
 
 function initOverlayLottie() {
   if (overlayLottieLoaded) return;
@@ -295,10 +333,7 @@ function cancelOverlaySequence() {
 }
 
 function ensureLinesContainer() {
-  // preferred (fade + remove old line)
   if (processingLines) return processingLines;
-
-  // legacy fallback (no fade, but only one line is visible)
   return processingSub;
 }
 
@@ -318,7 +353,7 @@ async function typewriterLine(el, text, runId) {
     el.appendChild(caret);
 
     const ch = s[i];
-    const extra = (ch === "." || ch === "!" || ch === "?" || ch === ",") ? LINE_TYPE_SPEED_MS * 3 : 0;
+    const extra = ch === "." || ch === "!" || ch === "?" || ch === "," ? LINE_TYPE_SPEED_MS * 3 : 0;
     await sleep(LINE_TYPE_SPEED_MS + extra);
   }
 
@@ -335,7 +370,6 @@ async function runOverlaySequence(filesCount = 1) {
   if (useNodes) container.innerHTML = "";
   else container.textContent = "";
 
-  // scale time with PDFs but cap so it doesn't become crazy slow
   const count = Math.max(1, Number(filesCount) || 1);
   const gapMs = Math.min(1200, LINE_GAP_BASE_MS * count);
 
@@ -344,7 +378,6 @@ async function runOverlaySequence(filesCount = 1) {
   for (const line of OVERLAY_LINES) {
     if (runId !== overlayRunId) return;
 
-    // fade out old node (only if #processingLines exists)
     if (useNodes && currentNode) {
       currentNode.classList.remove("show");
       currentNode.classList.add("hide");
@@ -362,7 +395,6 @@ async function runOverlaySequence(filesCount = 1) {
       requestAnimationFrame(() => node.classList.add("show"));
       await typewriterLine(node, line, runId);
     } else {
-      // legacy: overwrite the same element (only one line visible)
       await typewriterLine(container, line, runId);
     }
 
@@ -375,7 +407,6 @@ function showProcessingOverlay(filesCount = 1) {
 
   cancelOverlaySequence();
 
-  // hide legacy title if it exists (you don't want it fixed)
   if (processingTitle) processingTitle.style.display = "none";
 
   processingOverlay.classList.remove("hidden");
@@ -409,13 +440,15 @@ async function showProcessingSuccess() {
   await sleep(240);
   clearFilesAfterSuccess();
   hideProcessingOverlay();
+
+  // NEW: after overlay completion, reset type to default
+  resetTrainingType();
 }
 
 function clearFilesAfterSuccess() {
   selectedFiles = [];
   renderFileList();
 }
-
 
 function hideProcessingOverlay() {
   cancelOverlaySequence();
@@ -443,10 +476,8 @@ function isSupportedFile(file) {
   const name = (file.name || "").toLowerCase();
   const type = (file.type || "").toLowerCase();
 
-  // extension check (reliable even when MIME is missing)
   const typeOk = /\.(pdf|doc|docx|txt)$/.test(name);
 
-  // MIME check (some browsers provide this)
   const mimeOk = [
     "application/pdf",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document", // .docx
@@ -461,7 +492,7 @@ function fileKey(file) {
 }
 
 function addFiles(fileListLike) {
-  const incoming = Array.from(fileListLike || []).filter(isSupportedFile); //.filter(isPdf);
+  const incoming = Array.from(fileListLike || []).filter(isSupportedFile);
   if (!incoming.length) {
     setStatus("Please select PDF files only.", "error");
     return;
@@ -511,7 +542,6 @@ function startSimulatedProgress() {
   setProgress(p);
 
   progressTimer = setInterval(() => {
-    // ease toward 90% while backend works
     p = Math.min(90, p + Math.max(0.8, (90 - p) * 0.08));
     setProgress(p);
   }, 260);
@@ -537,12 +567,13 @@ async function uploadAndIngest() {
 
   showProcessingOverlay(selectedFiles.length);
   startSimulatedProgress();
-  
-  
-  //Ingest
+
   try {
     const form = new FormData();
     selectedFiles.forEach((f) => form.append("files", f, f.name));
+
+    // OPTIONAL: if you later want to send type to backend, uncomment:
+    // form.append("train_type", selectedTrainType);
 
     const res = await fetch(INGEST_ENDPOINT, { method: "POST", body: form });
 
@@ -578,13 +609,12 @@ async function uploadAndIngest() {
   }
 }
 
-//Crawl
+// Crawl
 async function runCrawl() {
   setDisabled(true);
   setStatus("Auto training in progress…", "online");
   setPhase("Auto Trainig From Website");
   log("Starting auto-download and training…");
-
 
   setProgress(10);
 
@@ -594,6 +624,7 @@ async function runCrawl() {
     const ct = res.headers.get("content-type") || "";
     const data = ct.includes("application/json") ? await res.json() : { message: await res.text() };
     setProgress(90);
+
     if (!res.ok) {
       const msg = data?.error || data?.message || `Request failed (${res.status})`;
       throw new Error(msg);
@@ -609,7 +640,6 @@ async function runCrawl() {
     setStatus("Auto Training complete.", "online");
     log("Auto Training complete.");
     log(`Metrics: files=${files}, Chapters=${chunks}, skipped=${skipped}`);
-
   } catch (err) {
     setProgress(0);
     setPhase("Error");
@@ -620,7 +650,6 @@ async function runCrawl() {
     setDisabled(false);
   }
 }
-
 
 /* =========================
    10) EVENTS
@@ -634,6 +663,13 @@ function bindEvents() {
 
   on(uploadBtn, "click", (e) => {
     e.preventDefault();
+
+    // NEW: must pick training type first
+    if (!selectedTrainType) {
+      showTrainTypeError();
+      return;
+    }
+
     uploadAndIngest();
   });
 
@@ -645,6 +681,18 @@ function bindEvents() {
   on(copyLogBtn, "click", (e) => {
     e.preventDefault();
     copyLogToClipboard();
+  });
+
+  trainingTypeItems.forEach((item) => {
+    item.addEventListener("click", (e) => {
+      e.preventDefault();
+
+      selectedTrainType = (item.dataset.trainType || "").toLowerCase();
+      setTrainingTypeLabel(selectedTrainType);
+
+      // NEW: clear red message once selected
+      hideTrainTypeError();
+    });
   });
 
   on(dropzone, "click", (e) => {
@@ -679,22 +727,17 @@ function bindEvents() {
 
   if (chatLink) {
     chatLink.addEventListener("click", (e) => {
-      // prevent direct navigation; modal will open
       e.preventDefault();
     });
   }
 
   if (chatYesBtn && chatLink) {
     chatYesBtn.addEventListener("click", async () => {
-      
-      // close modal first
       const modalEl = document.getElementById("chatConfirmModal");
       const modalInstance = window.bootstrap?.Modal.getInstance(modalEl);
       modalInstance?.hide();
 
-      // call backend crawl endpoint
       await runCrawl();
-      //window.open(url, "_blank", "noopener");
     });
   }
 }
@@ -808,6 +851,10 @@ function init() {
   setProgress(0);
   setPhase("Idle");
   setStatus("Ready.", "online");
+
+  // NEW: ensure default label + hide error on load
+  resetTrainingType();
+
   bindEvents();
   initParticles();
 }
