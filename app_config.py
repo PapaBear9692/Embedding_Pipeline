@@ -16,7 +16,7 @@ ENV_PATH = ROOT_DIR / ".env"
 EMBED_MODEL_NAME = "abhinand/MedEmbed-base-v0.1"  # or -large
 EMBEDDING_DIM = 768
 
-PINECONE_INDEX_NAME = "llama-medembed-index-test"
+PINECONE_INDEX_NAME = "sqbot-data-index"
 PINECONE_CLOUD = "aws"
 PINECONE_REGION = "us-east-1"
 PINECONE_NAMESPACE = None
