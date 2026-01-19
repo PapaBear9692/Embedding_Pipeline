@@ -17,7 +17,6 @@ from upsert import build_index
 # -----------------------
 # CONFIG
 # -----------------------
-#BASE_LISTING_URL = "https://www.squarepharma.com.bd/products-by-tradename.php"
 BASE_LISTING_URLS = {
     "pharma": "https://www.squarepharma.com.bd/products-by-tradename.php",
     "herbal": "https://www.squarepharma.com.bd/products-by-tradename-herbal-nutraceuticals.php",
@@ -27,10 +26,13 @@ PRODUCT_URL_RE = re.compile(r"product-details\.php\?pid=\d+", re.IGNORECASE)
 CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
 
 # Run BOTH "pharma" and "herbal" in one execution
-RUN_TYPES = ["pharma", "herbal"]  #   (site types: pharma | herbal | agrovet) 
+RUN_TYPES = ["pharma", "herbal"]
 
 ROOT_DIR = Path(__file__).resolve().parent
-PDF_DIR = ROOT_DIR / "data"
+
+# Base data dir (type-specific subfolders will be used)
+DATA_DIR = ROOT_DIR / "data"
+
 JSON_DIR = ROOT_DIR / "save"
 OUT_JSON = JSON_DIR / "product_pdf_map.json"
 
@@ -45,8 +47,6 @@ UA = "Mozilla/5.0 (compatible; SquarePharmaPDFDownloader/1.2)"
 def clean_text(s: str) -> str:
     return re.sub(r"\s+", " ", (s or "")).strip()
 
-# def listing_url(prod_type: str, ch: str) -> str:
-#     return f"{BASE_LISTING_URL}?type={prod_type}&char={ch}"
 
 def listing_url(prod_type: str, ch: str) -> str:
     base = BASE_LISTING_URLS.get(prod_type)
@@ -54,15 +54,14 @@ def listing_url(prod_type: str, ch: str) -> str:
         raise ValueError(f"Unknown product type: {prod_type}")
     return f"{base}?type={prod_type}&char={ch}"
 
+
 def sanitize_windows_filename(name: str, max_len: int = 140) -> str:
     name = clean_text(name)
     name = unicodedata.normalize("NFKC", name)
 
-    # remove common symbols from filenames
     name = name.replace("®", "").replace("™", "").replace("©", "").replace("TM", "")
     name = clean_text(name)
 
-    # Windows forbidden chars: \ / : * ? " < > |
     name = re.sub(r'[\\/:*?"<>|]+', "-", name)
     name = re.sub(r"\s+", " ", name)
     name = re.sub(r"-{2,}", "-", name).strip()
@@ -76,6 +75,7 @@ def sanitize_windows_filename(name: str, max_len: int = 140) -> str:
 
     return name
 
+
 def unique_path(path: Path) -> Path:
     """If path exists, add (1), (2), ... to avoid overwriting."""
     if not path.exists():
@@ -88,6 +88,7 @@ def unique_path(path: Path) -> Path:
             return cand
         i += 1
 
+
 def extract_product_name(soup: BeautifulSoup) -> str:
     h1 = soup.select_one("#toptizerpdetails h1.pdetails")
     if h1:
@@ -97,35 +98,37 @@ def extract_product_name(soup: BeautifulSoup) -> str:
         return clean_text(h1_any.get_text(" ", strip=True))
     return ""
 
+
 def extract_prescribing_pdf_url(page_url: str, soup: BeautifulSoup) -> str:
-    # Prefer the “View Prescribing Details” link
-    a = soup.find("a", string=lambda t: t and "Prescribing" in t) # type: ignore
+    a = soup.find("a", string=lambda t: t and "Prescribing" in t)  # type: ignore
     if a and a.get("href"):
         href = a["href"].strip()
         if href.lower().endswith(".pdf"):
             return urljoin(page_url, href)
 
-    # Fallback: any PDF inside downloads/
     for a in soup.select('a[href*="downloads/"]'):
-        href = (a.get("href") or "").strip() # type: ignore
+        href = (a.get("href") or "").strip()  # type: ignore
         if href.lower().endswith(".pdf"):
             return urljoin(page_url, href)
 
     return ""
 
+
 def extract_product_links(listing_page_url: str, html: str) -> list[str]:
     soup = BeautifulSoup(html, "lxml")
     links = set()
     for a in soup.select("a[href]"):
-        href = (a.get("href") or "").strip() # type: ignore
+        href = (a.get("href") or "").strip()  # type: ignore
         if href and PRODUCT_URL_RE.search(href):
             links.add(urljoin(listing_page_url, href))
     return list(links)
+
 
 def pdf_basename_from_url(pdf_url: str) -> str:
     p = urlparse(pdf_url)
     name = Path(unquote(p.path)).name
     return name or "unknown.pdf"
+
 
 def load_state() -> dict:
     if OUT_JSON.exists():
@@ -141,11 +144,17 @@ def load_state() -> dict:
             return {"items": [], "failures": []}
     return {"items": [], "failures": []}
 
+
 def save_state(state: dict) -> None:
     JSON_DIR.mkdir(parents=True, exist_ok=True)
     state["count"] = len(state.get("items", []))
     with open(OUT_JSON, "w", encoding="utf-8") as f:
         json.dump(state, f, ensure_ascii=False, indent=2)
+
+
+def type_pdf_dir(prod_type: str) -> Path:
+    """data/Pharma or data/Herbal based on prod_type."""
+    return DATA_DIR / prod_type.strip().lower().capitalize()
 
 
 # -----------------------
@@ -190,8 +199,12 @@ class Client:
 # MAIN
 # -----------------------
 def dataCrawler(run_types: list[str] = RUN_TYPES):
-    PDF_DIR.mkdir(parents=True, exist_ok=True)
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
     JSON_DIR.mkdir(parents=True, exist_ok=True)
+
+    # Ensure type folders exist
+    for t in run_types:
+        type_pdf_dir(t).mkdir(parents=True, exist_ok=True)
 
     c = Client()
     state = load_state()
@@ -214,7 +227,6 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
     total_pages = 0
 
     for prod_type in run_types:
-        # 1) Collect product URLs A-Z for this type
         all_product_urls = set()
         for ch in CHAR_BUCKETS:
             url = listing_url(prod_type, ch)
@@ -228,13 +240,15 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type.upper()} {ch}] listing failed: {e}")
             finally:
                 c.sleep()
-                time.sleep(1)  # extra delay between listing pages
+                time.sleep(1)
 
         all_product_urls = sorted(all_product_urls)
         total_pages += len(all_product_urls)
         print(f"\n[{prod_type.upper()}] Total product pages collected: {len(all_product_urls)}")
 
-        # 2) Visit each product page; download only if original_pdf_filename not already in JSON
+        # Type-specific destination folder
+        dest_dir = type_pdf_dir(prod_type)
+
         for i, purl in enumerate(all_product_urls, start=1):
             try:
                 html = c.fetch_html(purl)
@@ -257,19 +271,19 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                     print(f"[{prod_type} {i}/{len(all_product_urls)}] SKIP (already in JSON): {product_name} -> {original_pdf_filename}")
                     continue
 
-                # rename BEFORE download: "<product>.pdf"
                 safe_product = sanitize_windows_filename(product_name)
                 desired_name = f"{safe_product}.pdf"
-                out_path = unique_path(PDF_DIR / desired_name)
+                out_path = unique_path(dest_dir / desired_name)
 
                 record = {
-                    "type": prod_type,  # distinguish pharma vs herbal
+                    "type": prod_type,
                     "product_name": product_name,
                     "product_url": purl,
                     "pdf_url": pdf_url,
                     "original_pdf_filename": original_pdf_filename,
                     "renamed_pdf_filename": out_path.name,
                     "downloaded": False,
+                    "saved_path": str(out_path),  # optional but useful
                 }
 
                 # Save JSON BEFORE download
@@ -279,11 +293,10 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 state["failures"] = failures
                 save_state(state)
 
-                # Download
                 c.download_file(pdf_url, out_path)
                 record["downloaded"] = True
                 save_state(state)
-                
+
                 new_downloads += 1
                 print(f"[{prod_type} {i}/{len(all_product_urls)}] DOWNLOADED: {product_name} -> {out_path.name} (orig: {original_pdf_filename})")
 
@@ -294,14 +307,14 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type} {i}/{len(all_product_urls)}] product failed: {purl} :: {e}")
             finally:
                 c.sleep()
-                time.sleep(2)  # extra delay between downloads
+                time.sleep(2)
 
     state["items"] = items
     state["failures"] = failures
     save_state(state)
 
     print(f"\nSaved JSON → {OUT_JSON}")
-    print(f"PDF dir → {PDF_DIR}")
+    print(f"Data dir → {DATA_DIR} (downloads stored in type subfolders)")
     print(f"Total pages visited (pharma+herbal) → {total_pages}")
     print(f"New unique PDFs downloaded this run → {new_downloads}")
     print(f"Total failures recorded → {len(failures)}")
@@ -310,7 +323,4 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
 
 if __name__ == "__main__":
     dataCrawler()
-    subprocess.run(
-        [sys.executable, "upsert.py"],
-        check=True
-    )
+    subprocess.run([sys.executable, "upsert.py"], check=True)

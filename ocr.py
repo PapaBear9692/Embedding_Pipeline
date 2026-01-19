@@ -1,26 +1,15 @@
 # ocr.py
 """
-Layout Parser JSON-first pipeline:
-  1) Read all PDFs from ./ocr/
-  2) Send each PDF to Google Document AI (Layout Parser processor)
-  3) Convert OCR output to JSON and save: ./data/<name>.layout.json
-  4) Build a readable PDF from JSON (not from document.text): ./data/<name>.ocr.pdf
+Layout Parser JSON-first pipeline (type-aware):
+  - Manual upload:
+      data/Pharma/*.pdf   -> OCR -> data/train_data/Pharma/*.pdf (+ .layout.json)
+      data/Herbal/*.pdf   -> OCR -> data/train_data/Herbal/*.pdf (+ .layout.json)
+
+  - Crawler (no type provided):
+      Processes BOTH Pharma + Herbal folders in one run.
 
 Run:
   python ocr.py
-
-Requirements:
-  pip install google-cloud-documentai python-dotenv reportlab
-
-.env (same folder as this file):
-  GCP_PROJECT_ID=...
-  GCP_DOCAI_PROCESSOR_ID=...
-  GCP_DOCAI_LOCATION=us or eu
-  GOOGLE_APPLICATION_CREDENTIALS=/abs/path/to/service-account.json
-
-Folders:
-  ./ocr/   input PDFs
-  ./data/  output PDFs + JSON
 """
 
 from __future__ import annotations
@@ -29,7 +18,7 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Iterable
 
 from dotenv import load_dotenv
 from google.api_core.client_options import ClientOptions
@@ -50,8 +39,38 @@ from reportlab.platypus import Preformatted
 ROOT_DIR = Path(__file__).resolve().parent
 ENV_PATH = ROOT_DIR / ".env"
 
-IN_DIR = ROOT_DIR / "data"
-OUT_DIR = ROOT_DIR / "data" / "train_data"
+DATA_DIR = ROOT_DIR / "data"
+TRAIN_DATA_DIR = DATA_DIR / "train_data"
+
+ALLOWED_TYPES = {"pharma", "herbal"}
+
+
+def _normalize_type(t: Optional[str]) -> Optional[str]:
+    if not t:
+        return None
+    t = t.strip().lower()
+    return t if t in ALLOWED_TYPES else None
+
+
+def _cap_type(t: str) -> str:
+    return t.strip().lower().capitalize()
+
+
+def _iter_types(train_type: Optional[str]) -> List[str]:
+    """
+    If train_type is provided -> [train_type]
+    If None -> ["pharma", "herbal"]
+    """
+    t = _normalize_type(train_type)
+    return [t] if t else ["pharma", "herbal"]
+
+
+def _in_dir_for_type(t: str) -> Path:
+    return DATA_DIR / _cap_type(t)
+
+
+def _out_dir_for_type(t: str) -> Path:
+    return TRAIN_DATA_DIR / _cap_type(t)
 
 
 # -----------------------------
@@ -144,12 +163,11 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
 
     flow = [Paragraph(_escape_xml(title), style_title), Spacer(1, 6)]
 
-    # Split by lines so we can treat table blocks specially
     lines = cleaned.splitlines()
 
     in_table = False
-    table_lines = []
-    para_lines = []
+    table_lines: List[str] = []
+    para_lines: List[str] = []
 
     def flush_para():
         nonlocal para_lines
@@ -160,7 +178,6 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
         if not block:
             return
 
-        # Split into paragraph blocks by blank lines
         blocks = re.split(r"\n\s*\n", block)
         for b in blocks:
             b = b.strip()
@@ -170,12 +187,10 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
             if not ls:
                 continue
 
-            # heading?
             if len(ls) == 1 and _looks_like_heading(ls[0]) and not _BULLET_RE.match(ls[0]):
                 flow.append(Paragraph(_escape_xml(ls[0]), style_h))
                 continue
 
-            # bullet block?
             bullet_count = sum(1 for ln in ls if _BULLET_RE.match(ln))
             if bullet_count >= max(2, int(0.6 * len(ls))):
                 for ln in ls:
@@ -187,7 +202,6 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
                 flow.append(Spacer(1, 4))
                 continue
 
-            # normal paragraph (join lines to avoid weird wraps)
             paragraph = " ".join(ls)
             flow.append(Paragraph(_escape_xml(paragraph), style_body))
 
@@ -195,13 +209,11 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
         nonlocal table_lines
         if not table_lines:
             return
-        # Keep as-is; Preformatted preserves spacing/newlines
         table_text = "\n".join(table_lines).rstrip()
         table_lines = []
         if not table_text.strip():
             return
 
-        # Add a small label and render monospace
         flow.append(Paragraph(_escape_xml("TABLE"), style_h))
         flow.append(Preformatted(_escape_xml(table_text), style_table))
         flow.append(Spacer(1, 6))
@@ -221,7 +233,6 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
             continue
 
         if in_table:
-            # render raw table lines as-is; don't strip hard
             table_lines.append(raw)
         else:
             para_lines.append(raw)
@@ -236,27 +247,18 @@ def _export_text_as_readable_pdf(title: str, text: str, out_pdf: Path) -> None:
 # -----------------------------
 # JSON-first extraction (Layout Parser)
 # -----------------------------
-
 def _extract_text_from_layout_json(doc: dict) -> str:
-    """
-    Build nicely formatted plain text from Layout Parser snake_case JSON.
-    - Uses text_block.type_ (heading vs paragraph)
-    - Preserves nesting (headings + their child blocks)
-    - Prints tables row-by-row with a separator
-    """
-
     layout = doc.get("document_layout") or {}
     blocks = layout.get("blocks") or []
     if not blocks:
         return ""
 
-    out = []
+    out: List[str] = []
 
     def fix_text(s: str) -> str:
         s = str(s or "")
-        # common docAI / OCR formatting artifacts
         s = s.replace("^{\\circ}", "°").replace("\\circ", "°")
-        s = s.replace("~", " ")  # overdose line had 6-10~gm -> 6-10 gm
+        s = s.replace("~", " ")
         s = re.sub(r"[ \t]+", " ", s).strip()
         return s
 
@@ -270,18 +272,15 @@ def _extract_text_from_layout_json(doc: dict) -> str:
         if not text and not tb.get("blocks"):
             return
 
-        # Headings: uppercase + blank lines around for readability
         if typ.startswith("heading"):
             if out and out[-1] != "":
                 add_line("")
             add_line(text.upper())
             add_line("")
         else:
-            # paragraph
             if text:
                 add_line(text)
 
-        # Render children (nested blocks)
         children = tb.get("blocks") or []
         if children:
             render_blocks(children, level + 1)
@@ -294,7 +293,6 @@ def _extract_text_from_layout_json(doc: dict) -> str:
                 t = fix_text(ctb.get("text", ""))
                 if t:
                     parts.append(t)
-        # join pieces inside a cell
         return " ".join(parts).strip()
 
     def render_table(tab: dict) -> None:
@@ -309,7 +307,6 @@ def _extract_text_from_layout_json(doc: dict) -> str:
         for row in body_rows:
             cells = row.get("cells") or []
             row_cells = [cell_text_from_cell(c) for c in cells]
-            # keep empty cells but trim trailing empties
             while row_cells and not row_cells[-1]:
                 row_cells.pop()
 
@@ -321,19 +318,16 @@ def _extract_text_from_layout_json(doc: dict) -> str:
 
     def render_blocks(bs: list, level: int) -> None:
         for b in bs:
-            # text block
             tb = b.get("text_block")
             if tb:
                 render_text_block(tb, level)
                 continue
 
-            # table block
             tab = b.get("table_block")
             if tab:
                 render_table(tab)
                 continue
 
-            # (optional) list_block if your output ever contains it
             lb = b.get("list_block")
             if lb:
                 if out and out[-1] != "":
@@ -347,21 +341,15 @@ def _extract_text_from_layout_json(doc: dict) -> str:
 
     render_blocks(blocks, level=0)
 
-    # Post-clean:
     text = "\n".join(out)
-
-    # Remove 3+ blank lines
     text = re.sub(r"\n{3,}", "\n\n", text).strip()
-
-    # Join broken lines that are obviously wrapped mid-sentence
-    # (optional but helps: avoids "Ace XR\nTablet:" style breaks)
     text = re.sub(r"([a-z0-9,;:])\n([a-z])", r"\1 \2", text)
 
     return text
 
 
 # -----------------------------
-# Document AI (close to Google's sample)
+# Document AI
 # -----------------------------
 def _get_env(name: str) -> str:
     v = os.getenv(name, "").strip()
@@ -392,6 +380,8 @@ def _process_pdf_bytes(client, processor, pdf_bytes: bytes) -> documentai_v1.Doc
 
 def _cleanup_ocr_inputs(in_dir: Path) -> None:
     """Delete all PDF files from the OCR input folder."""
+    if not in_dir.exists():
+        return
     for p in in_dir.iterdir():
         if p.is_file() and p.suffix.lower() == ".pdf":
             try:
@@ -402,6 +392,8 @@ def _cleanup_ocr_inputs(in_dir: Path) -> None:
 
 def _cleanup_train_json(train_dir: Path) -> None:
     """Delete all JSON files from the train folder."""
+    if not train_dir.exists():
+        return
     for p in train_dir.iterdir():
         if p.is_file() and p.suffix.lower() == ".json":
             try:
@@ -410,10 +402,11 @@ def _cleanup_train_json(train_dir: Path) -> None:
                 print(f"WARNING: failed to delete train JSON {p.name}: {e}")
 
 
-# -----------------------------
-# ADD: Move .txt and .docx to OUT_DIR before OCR starts
-# -----------------------------
 def _move_txt_docx_inputs(in_dir: Path, out_dir: Path) -> None:
+    """Move .txt and .docx straight to train_data (no OCR needed)."""
+    if not in_dir.exists():
+        return
+    out_dir.mkdir(parents=True, exist_ok=True)
     for p in in_dir.iterdir():
         if p.is_file() and p.suffix.lower() in {".txt", ".docx"}:
             try:
@@ -425,63 +418,76 @@ def _move_txt_docx_inputs(in_dir: Path, out_dir: Path) -> None:
 # -----------------------------
 # Main
 # -----------------------------
-def run_ocr() -> None:
+def run_ocr(train_type: str | None = None) -> None:
+    """
+    train_type:
+      - 'pharma' or 'herbal' -> process only that folder
+      - None -> process BOTH folders
+    """
     load_dotenv(ENV_PATH)
 
     # ensure credentials env exists; SDK uses it automatically
     _ = _get_env("GOOGLE_APPLICATION_CREDENTIALS")
 
-    IN_DIR.mkdir(parents=True, exist_ok=True)
-    OUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    # move txt/docx straight to train_data before OCR
-    _move_txt_docx_inputs(IN_DIR, OUT_DIR)
-
-    pdfs = sorted([p for p in IN_DIR.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"])
-    if not pdfs:
-        print(f"No PDFs found in: {IN_DIR}")
-        return
-
     client, processor = _init_docai_client()
 
-    print(f"Found {len(pdfs)} PDF(s) in {IN_DIR}")
-    print(f"Using processor: {processor.name}")
+    types_to_run = _iter_types(train_type)
 
-    ok = 0
-    for pdf_path in pdfs:
-        try:
-            print(f"\nOCR -> {pdf_path.name}")
+    for t in types_to_run:
+        in_dir = _in_dir_for_type(t)
+        out_dir = _out_dir_for_type(t)
 
-            document = _process_pdf_bytes(client, processor, pdf_path.read_bytes())
+        in_dir.mkdir(parents=True, exist_ok=True)
+        out_dir.mkdir(parents=True, exist_ok=True)
 
-            # Convert to JSON dict and save (this is the "truth" for Layout Parser)
-            doc_json: Dict[str, Any] = MessageToDict(document._pb, preserving_proto_field_name=True)  # type: ignore[attr-defined]
-            json_out = OUT_DIR / f"{pdf_path.stem}.layout.json"
-            json_out.write_text(json.dumps(doc_json, ensure_ascii=False, indent=2), encoding="utf-8")
+        # move txt/docx straight to train_data before OCR
+        _move_txt_docx_inputs(in_dir, out_dir)
 
-            # Build PDF from JSON (prefer chunkedDocument)
-            text = _extract_text_from_layout_json(doc_json)
+        pdfs = sorted([p for p in in_dir.iterdir() if p.is_file() and p.suffix.lower() == ".pdf"])
+        if not pdfs:
+            print(f"[{_cap_type(t)}] No PDFs found in: {in_dir}")
+            continue
 
-            # Debug counters
-            chunks = (doc_json.get("chunkedDocument") or {}).get("chunks") or []
-            blocks = (doc_json.get("documentLayout") or {}).get("blocks") or []
-            pages = doc_json.get("pages") or []
-            print(f"Pages: {len(pages)} | Layout blocks: {len(blocks)} | Chunks: {len(chunks)}")
-            print("Extracted text length:", len(text))
-            print("Extracted preview:", repr(text[:200]))
+        print(f"\n[{_cap_type(t)}] Found {len(pdfs)} PDF(s) in {in_dir}")
+        print(f"[{_cap_type(t)}] Using processor: {processor.name}")
 
-            out_pdf = OUT_DIR / f"{pdf_path.stem}.pdf"
-            _export_text_as_readable_pdf(pdf_path.stem, text, out_pdf)
+        ok = 0
+        for pdf_path in pdfs:
+            try:
+                print(f"\n[{_cap_type(t)}] OCR -> {pdf_path.name}")
 
-            print(f"Saved JSON: {json_out}")
-            print(f"Saved PDF : {out_pdf}")
-            ok += 1
-        except Exception as e:
-            print(f"FAILED: {pdf_path.name} -> {e}")
+                document = _process_pdf_bytes(client, processor, pdf_path.read_bytes())
 
-    print(f"\nDone. Successfully processed {ok}/{len(pdfs)} file(s).")
-    _cleanup_ocr_inputs(IN_DIR)
-    _cleanup_train_json(OUT_DIR)
+                # Convert to JSON dict and save (snake_case due to preserving_proto_field_name=True)
+                doc_json: Dict[str, Any] = MessageToDict(
+                    document._pb,  # type: ignore[attr-defined]
+                    preserving_proto_field_name=True,
+                )
+                json_out = out_dir / f"{pdf_path.stem}.layout.json"
+                json_out.write_text(json.dumps(doc_json, ensure_ascii=False, indent=2), encoding="utf-8")
+
+                text = _extract_text_from_layout_json(doc_json)
+
+                # Debug counters (snake_case keys)
+                pages = doc_json.get("pages") or []
+                layout_blocks = ((doc_json.get("document_layout") or {}).get("blocks")) or []
+                print(f"[{_cap_type(t)}] Pages: {len(pages)} | Layout blocks: {len(layout_blocks)}")
+                print(f"[{_cap_type(t)}] Extracted text length: {len(text)}")
+
+                out_pdf = out_dir / f"{pdf_path.stem}.pdf"
+                _export_text_as_readable_pdf(pdf_path.stem, text, out_pdf)
+
+                print(f"[{_cap_type(t)}] Saved JSON: {json_out.name}")
+                print(f"[{_cap_type(t)}] Saved PDF : {out_pdf.name}")
+                ok += 1
+            except Exception as e:
+                print(f"[{_cap_type(t)}] FAILED: {pdf_path.name} -> {e}")
+
+        print(f"\n[{_cap_type(t)}] Done. Successfully processed {ok}/{len(pdfs)} file(s).")
+
+        # Cleanup only this type's input/output JSON
+        _cleanup_ocr_inputs(in_dir)
+        _cleanup_train_json(out_dir)
 
 
 if __name__ == "__main__":

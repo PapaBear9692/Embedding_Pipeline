@@ -7,7 +7,8 @@ from llama_index.core.node_parser import SentenceSplitter
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.vector_stores.pinecone import PineconeVectorStore
 from pinecone import Pinecone, ServerlessSpec
-from prime_node import get_prime_node
+
+from prime_node import get_prime_nodes
 
 ROOT_DIR = Path(__file__).resolve().parent
 ENV_PATH = ROOT_DIR / ".env"
@@ -15,21 +16,28 @@ ENV_PATH = ROOT_DIR / ".env"
 EMBED_MODEL_NAME = "abhinand/MedEmbed-base-v0.1"  # or -large
 EMBEDDING_DIM = 768
 
-PINECONE_INDEX_NAME = "llama-medembed-index"
+PINECONE_INDEX_NAME = "llama-medembed-index-test"
 PINECONE_CLOUD = "aws"
 PINECONE_REGION = "us-east-1"
 PINECONE_NAMESPACE = None
 
-def upsert_prime_node(pinecone_index) -> None:
-    record = get_prime_node()
 
-    if len(record["values"]) != EMBEDDING_DIM:
-        raise ValueError(
-            f"Prime node embedding length {len(record['values'])} != EMBEDDING_DIM {EMBEDDING_DIM}"
-        )
+def upsert_prime_nodes(pinecone_index) -> None:
+    """
+    Ensure BOTH Prime nodes exist:
+      - Prime_Node_Pharma
+      - Prime_Node_Herbal
+    """
+    records = get_prime_nodes()
+
+    for r in records:
+        if len(r["values"]) != EMBEDDING_DIM:
+            raise ValueError(
+                f"{r['id']} embedding length {len(r['values'])} != EMBEDDING_DIM {EMBEDDING_DIM}"
+            )
 
     pinecone_index.upsert(
-        vectors=[record],
+        vectors=records,
         namespace=PINECONE_NAMESPACE,
     )
 
@@ -41,7 +49,7 @@ def init_settings_and_storage():
     if not pinecone_api_key:
         raise ValueError("Missing PINECONE_API_KEY in .env")
 
-    # Still keeping Settings for your normal LlamaIndex ingestion pipeline
+    # LlamaIndex settings
     Settings.embed_model = HuggingFaceEmbedding(
         model_name=EMBED_MODEL_NAME,
         device="cpu",  # or "cuda"
@@ -66,12 +74,17 @@ def init_settings_and_storage():
                 region=PINECONE_REGION,
             ),
         )
+
         pinecone_index = pc.Index(PINECONE_INDEX_NAME)
-        upsert_prime_node(pinecone_index)
-        print("Prime node inserted (exact Pinecone format).")
+        upsert_prime_nodes(pinecone_index)
+        print("Prime nodes inserted (Pharma + Herbal).")
 
     else:
         print(f"Using existing Pinecone index '{PINECONE_INDEX_NAME}'")
+
+        pinecone_index = pc.Index(PINECONE_INDEX_NAME)
+        upsert_prime_nodes(pinecone_index)
+        print("Prime nodes ensured (Pharma + Herbal).")
 
     pinecone_index = pc.Index(PINECONE_INDEX_NAME)
 

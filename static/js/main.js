@@ -573,7 +573,7 @@ async function uploadAndIngest() {
     selectedFiles.forEach((f) => form.append("files", f, f.name));
 
     // OPTIONAL: if you later want to send type to backend, uncomment:
-    // form.append("train_type", selectedTrainType);
+    form.append("train_type", selectedTrainType);
 
     const res = await fetch(INGEST_ENDPOINT, { method: "POST", body: form });
 
@@ -722,17 +722,17 @@ function bindEvents() {
   });
 
   // Chat confirmation modal behavior
-  const chatLink = document.getElementById("chatLink");
-  const chatYesBtn = document.getElementById("chatConfirmYesBtn");
+  const crawlerLink = document.getElementById("chatLink");
+  const crawlerYesBtn = document.getElementById("chatConfirmYesBtn");
 
-  if (chatLink) {
-    chatLink.addEventListener("click", (e) => {
+  if (crawlerLink) {
+    crawlerLink.addEventListener("click", (e) => {
       e.preventDefault();
     });
   }
 
-  if (chatYesBtn && chatLink) {
-    chatYesBtn.addEventListener("click", async () => {
+  if (crawlerYesBtn && crawlerLink) {
+    crawlerYesBtn.addEventListener("click", async () => {
       const modalEl = document.getElementById("chatConfirmModal");
       const modalInstance = window.bootstrap?.Modal.getInstance(modalEl);
       modalInstance?.hide();

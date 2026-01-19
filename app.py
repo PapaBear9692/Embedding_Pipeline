@@ -1,16 +1,21 @@
 import os
 import threading
 from pathlib import Path
+
 from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
-from dataCrawler import PDF_DIR, dataCrawler
-from upsert import build_index  # calls your existing pipeline
 
+from upsert import build_index
+from dataCrawler import dataCrawler  # ✅ make sure this import path matches your file name
 
 ROOT_DIR = Path(__file__).resolve().parent
-UPLOAD_DIR = ROOT_DIR / "data"
 
 ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
+
+# Base data dirs (type-aware)
+DATA_DIR = ROOT_DIR / "data"
+PHARMA_DIR = DATA_DIR / "Pharma"
+HERBAL_DIR = DATA_DIR / "Herbal"
 
 _embed_lock = threading.Lock()
 
@@ -19,15 +24,23 @@ def allowed_file(filename: str) -> bool:
     ext = Path(filename).suffix.lower()
     return ext in ALLOWED_EXTENSIONS
 
-def create_app():
 
+def _count_pdfs_in_type_folders() -> set[str]:
+    """Return set of all PDF filenames found under data/Pharma and data/Herbal."""
+    PHARMA_DIR.mkdir(parents=True, exist_ok=True)
+    HERBAL_DIR.mkdir(parents=True, exist_ok=True)
+
+    pharma = {p.name for p in PHARMA_DIR.glob("*.pdf")}
+    herbal = {p.name for p in HERBAL_DIR.glob("*.pdf")}
+    return pharma | herbal
+
+
+def create_app():
     app = Flask(__name__)
     print("Flask app running...")
 
-    # Optional: limit upload size (e.g., 50MB total request)
+    # Optional: limit upload size (e.g., 100MB total request)
     app.config["MAX_CONTENT_LENGTH"] = 100 * 1024 * 1024
-
-    UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
     @app.get("/")
     def home():
@@ -37,6 +50,16 @@ def create_app():
     @app.post("/api/train")
     def ingest():
         print("Received ingest request...")
+
+        train_type = (request.form.get("train_type") or "").strip().lower()
+        if train_type not in {"pharma", "herbal"}:
+            return jsonify(
+                {"error": "Invalid or missing product type. Select Pharma or Herbal first."}
+            ), 400
+
+        upload_dir = DATA_DIR / train_type.capitalize()
+        upload_dir.mkdir(parents=True, exist_ok=True)
+
         # Frontend sends "files" (multiple)
         if "files" not in request.files:
             return jsonify({"error": "No files field in form-data (expected key: files)"}), 400
@@ -48,6 +71,7 @@ def create_app():
 
         saved = 0
         skipped = 0
+
         for f in files:
             if not f or not f.filename:
                 skipped += 1
@@ -62,22 +86,28 @@ def create_app():
                 skipped += 1
                 continue
 
-            out_path = UPLOAD_DIR / filename
+            out_path = upload_dir / filename
             f.save(out_path)
             saved += 1
 
         if saved == 0:
-            return jsonify({"error": "No valid PDF files to ingest", "files": 0, "chunks": 0, "skipped": skipped}), 400
+            return jsonify(
+                {"error": "No valid files to ingest", "files": 0, "chunks": 0, "skipped": skipped}
+            ), 400
+
         chunk_count = 0
         try:
-            result = build_index()
+            result = build_index(train_type=train_type)
             if result is None:
                 chunk_count = 0
             else:
-                index, chunk_count = result
+                _, chunk_count = result
 
         except Exception as e:
-            return jsonify({"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}), 500
+            return jsonify(
+                {"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}
+            ), 500
+
         print("Training complete.")
         return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
 
@@ -92,47 +122,39 @@ def create_app():
         chunk_count = 0
 
         try:
-            PDF_DIR.mkdir(parents=True, exist_ok=True)
+            # Count PDFs before (across both type folders)
+            before_pdfs = _count_pdfs_in_type_folders()
 
-            # count PDFs before
-            before_pdfs = {p.name for p in PDF_DIR.glob("*.pdf")}
-
-            # 1) auto-download into /data
+            # 1) auto-download into data/Pharma and data/Herbal (crawler decides)
             dataCrawler()
 
-            # count PDFs after -> compute "saved" as new files
-            after_pdfs = {p.name for p in PDF_DIR.glob("*.pdf")}
+            # Count PDFs after -> compute "saved" as new filenames
+            after_pdfs = _count_pdfs_in_type_folders()
             saved = len(after_pdfs - before_pdfs)
 
             if saved == 0:
-                # match ingest() behavior (400 when nothing valid to process)
-                return jsonify({
-                    "error": "No New PDF files to ingest",
-                    "files": 0,
-                    "chunks": 0,
-                    "skipped": skipped
-                }), 400
+                return jsonify(
+                    {"error": "No New PDF files to ingest", "files": 0, "chunks": 0, "skipped": skipped}
+                ), 400
 
-            # 2) embed/build index
-            result = build_index()
+            # 2) embed/build index for BOTH types
+            result = build_index()  # train_type=None -> process both
             if result is None:
                 chunk_count = 0
             else:
-                index, chunk_count = result
+                _, chunk_count = result
 
             return jsonify({"files": saved, "chunks": chunk_count, "skipped": skipped})
 
         except Exception as e:
-            return jsonify({"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}), 500
+            return jsonify(
+                {"error": str(e), "files": saved, "chunks": chunk_count, "skipped": skipped}
+            ), 500
 
         finally:
             _embed_lock.release()
 
-
     return app
-
-
-
 
 
 if __name__ == "__main__":
