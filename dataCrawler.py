@@ -20,13 +20,14 @@ from upsert import build_index
 BASE_LISTING_URLS = {
     "pharma": "https://www.squarepharma.com.bd/products-by-tradename.php",
     "herbal": "https://www.squarepharma.com.bd/products-by-tradename-herbal-nutraceuticals.php",
+   "agrovet": "https://www.squarepharma.com.bd/products-by-tradename-agrovet-pesticides.php",
 }
 PRODUCT_URL_RE = re.compile(r"product-details\.php\?pid=\d+", re.IGNORECASE)
 
-CHAR_BUCKETS = [chr(c) for c in range(ord("A"), ord("Z") + 1)]
+CHAR_BUCKETS = [chr(c) for c in range(ord("L"), ord("Z") + 1)]
 
 # Run BOTH "pharma" and "herbal" in one execution
-RUN_TYPES = ["pharma", "herbal"]
+RUN_TYPES = ["pharma", "herbal", "agrovet"]
 
 ROOT_DIR = Path(__file__).resolve().parent
 
@@ -37,7 +38,7 @@ JSON_DIR = ROOT_DIR / "save"
 OUT_JSON = JSON_DIR / "product_pdf_map.json"
 
 REQUEST_TIMEOUT = 30
-SLEEP_SECONDS = 0.6
+SLEEP_SECONDS = 1
 UA = "Mozilla/5.0 (compatible; SquarePharmaPDFDownloader/1.2)"
 
 
@@ -240,7 +241,7 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
                 print(f"[{prod_type.upper()} {ch}] listing failed: {e}")
             finally:
                 c.sleep()
-                time.sleep(1)
+                time.sleep(2)
 
         all_product_urls = sorted(all_product_urls)
         total_pages += len(all_product_urls)
@@ -323,4 +324,4 @@ def dataCrawler(run_types: list[str] = RUN_TYPES):
 
 if __name__ == "__main__":
     dataCrawler()
-    subprocess.run([sys.executable, "upsert.py"], check=True)
+    #subprocess.run([sys.executable, "upsert.py"], check=True)

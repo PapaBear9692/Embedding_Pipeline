@@ -42,7 +42,7 @@ ENV_PATH = ROOT_DIR / ".env"
 DATA_DIR = ROOT_DIR / "data"
 TRAIN_DATA_DIR = DATA_DIR / "train_data"
 
-ALLOWED_TYPES = {"pharma", "herbal"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
 
 
 def _normalize_type(t: Optional[str]) -> Optional[str]:
@@ -59,10 +59,10 @@ def _cap_type(t: str) -> str:
 def _iter_types(train_type: Optional[str]) -> List[str]:
     """
     If train_type is provided -> [train_type]
-    If None -> ["pharma", "herbal"]
+    If None -> ["pharma", "herbal", "agrovet"]
     """
     t = _normalize_type(train_type)
-    return [t] if t else ["pharma", "herbal"]
+    return [t] if t else ["pharma", "herbal", "agrovet"]
 
 
 def _in_dir_for_type(t: str) -> Path:
@@ -463,8 +463,8 @@ def run_ocr(train_type: str | None = None) -> None:
                     document._pb,  # type: ignore[attr-defined]
                     preserving_proto_field_name=True,
                 )
-                json_out = out_dir / f"{pdf_path.stem}.layout.json"
-                json_out.write_text(json.dumps(doc_json, ensure_ascii=False, indent=2), encoding="utf-8")
+                #json_out = out_dir / f"{pdf_path.stem}.layout.json"
+                #json_out.write_text(json.dumps(doc_json, ensure_ascii=False, indent=2), encoding="utf-8")
 
                 text = _extract_text_from_layout_json(doc_json)
 
@@ -477,7 +477,7 @@ def run_ocr(train_type: str | None = None) -> None:
                 out_pdf = out_dir / f"{pdf_path.stem}.pdf"
                 _export_text_as_readable_pdf(pdf_path.stem, text, out_pdf)
 
-                print(f"[{_cap_type(t)}] Saved JSON: {json_out.name}")
+                #print(f"[{_cap_type(t)}] Saved JSON: {json_out.name}")
                 print(f"[{_cap_type(t)}] Saved PDF : {out_pdf.name}")
                 ok += 1
             except Exception as e:
@@ -487,7 +487,7 @@ def run_ocr(train_type: str | None = None) -> None:
 
         # Cleanup only this type's input/output JSON
         _cleanup_ocr_inputs(in_dir)
-        _cleanup_train_json(out_dir)
+        #_cleanup_train_json(out_dir)
 
 
 if __name__ == "__main__":

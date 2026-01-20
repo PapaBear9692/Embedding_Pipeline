@@ -6,7 +6,7 @@ from flask import Flask, jsonify, render_template, request
 from werkzeug.utils import secure_filename
 
 from upsert import build_index
-from dataCrawler import dataCrawler  # ✅ make sure this import path matches your file name
+from dataCrawler import dataCrawler
 
 ROOT_DIR = Path(__file__).resolve().parent
 
@@ -16,6 +16,7 @@ ALLOWED_EXTENSIONS = {".pdf", ".docx", ".txt"}
 DATA_DIR = ROOT_DIR / "data"
 PHARMA_DIR = DATA_DIR / "Pharma"
 HERBAL_DIR = DATA_DIR / "Herbal"
+AGROVET_DIR = DATA_DIR / "Agrovet"
 
 _embed_lock = threading.Lock()
 
@@ -29,10 +30,12 @@ def _count_pdfs_in_type_folders() -> set[str]:
     """Return set of all PDF filenames found under data/Pharma and data/Herbal."""
     PHARMA_DIR.mkdir(parents=True, exist_ok=True)
     HERBAL_DIR.mkdir(parents=True, exist_ok=True)
+    AGROVET_DIR.mkdir(parents=True, exist_ok=True)
 
     pharma = {p.name for p in PHARMA_DIR.glob("*.pdf")}
     herbal = {p.name for p in HERBAL_DIR.glob("*.pdf")}
-    return pharma | herbal
+    agrovet = {p.name for p in AGROVET_DIR.glob("*.pdf")}
+    return pharma | herbal | agrovet
 
 
 def create_app():
@@ -52,9 +55,9 @@ def create_app():
         print("Received ingest request...")
 
         train_type = (request.form.get("train_type") or "").strip().lower()
-        if train_type not in {"pharma", "herbal"}:
+        if train_type not in {"pharma", "herbal", "agrovet"}:
             return jsonify(
-                {"error": "Invalid or missing product type. Select Pharma or Herbal first."}
+                {"error": "Invalid or missing product type. Select Pharma, Herbal, or Agrovet first."}
             ), 400
 
         upload_dir = DATA_DIR / train_type.capitalize()

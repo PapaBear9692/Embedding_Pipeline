@@ -13,3 +13,5 @@ __pycache__/upsert.cpython-311.pyc
 
 
 save/gcp-credentials.json
+
+data/*

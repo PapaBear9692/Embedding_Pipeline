@@ -5,13 +5,13 @@ import json
 from typing import Dict, List
 
 
-ALLOWED_TYPES = {"pharma", "herbal"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
 
 
 def _normalize_type(train_type: str) -> str:
     t = (train_type or "").strip().lower()
     if t not in ALLOWED_TYPES:
-        raise ValueError("train_type must be 'pharma' or 'herbal'")
+        raise ValueError("train_type must be 'pharma', 'herbal', or 'agrovet'")
     return t
 
 
@@ -125,8 +125,8 @@ def get_prime_node(train_type: str) -> Dict:
 
 
 def get_prime_nodes() -> List[Dict]:
-    """Return BOTH Prime nodes for one-time upsert."""
-    return [get_prime_node("pharma"), get_prime_node("herbal")]
+    """Return all Prime nodes for one-time upsert."""
+    return [get_prime_node("pharma"), get_prime_node("herbal"), get_prime_node("agrovet")]
 
 
 

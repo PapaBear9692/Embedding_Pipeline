@@ -27,6 +27,7 @@ def upsert_prime_nodes(pinecone_index) -> None:
     Ensure BOTH Prime nodes exist:
       - Prime_Node_Pharma
       - Prime_Node_Herbal
+      - Prime_Node_Agrovet
     """
     records = get_prime_nodes()
 
@@ -77,14 +78,11 @@ def init_settings_and_storage():
 
         pinecone_index = pc.Index(PINECONE_INDEX_NAME)
         upsert_prime_nodes(pinecone_index)
-        print("Prime nodes inserted (Pharma + Herbal).")
+        print("Prime nodes inserted (Pharma + Herbal + Agrovet).")
 
     else:
         print(f"Using existing Pinecone index '{PINECONE_INDEX_NAME}'")
-
         pinecone_index = pc.Index(PINECONE_INDEX_NAME)
-        upsert_prime_nodes(pinecone_index)
-        print("Prime nodes ensured (Pharma + Herbal).")
 
     pinecone_index = pc.Index(PINECONE_INDEX_NAME)
 

@@ -8,7 +8,7 @@ from llama_index.core import SimpleDirectoryReader
 ROOT_DIR = Path(__file__).resolve().parent
 TRAIN_DATA_DIR = ROOT_DIR / "data" / "train_data"
 
-ALLOWED_TYPES = {"pharma", "herbal"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
 
 
 # ---------- HELPERS ----------
@@ -81,8 +81,8 @@ def load_documents(train_type: str | None = None):
     Load PDFs/DOCX/TXT with SimpleDirectoryReader and enrich metadata.
 
     train_type:
-      - 'pharma' or 'herbal' -> only that folder
-      - None -> load BOTH (recursive)
+      - 'pharma' or 'herbal' or 'agrovet' -> only that folder
+      - None -> load all (recursive)
     """
     t = _normalize_type(train_type)
 
