@@ -8,7 +8,7 @@ from llama_index.core import SimpleDirectoryReader
 ROOT_DIR = Path(__file__).resolve().parent
 TRAIN_DATA_DIR = ROOT_DIR / "data" / "train_data"
 
-ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet", "other"}
 
 
 # ---------- HELPERS ----------

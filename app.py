@@ -17,6 +17,7 @@ DATA_DIR = ROOT_DIR / "data"
 PHARMA_DIR = DATA_DIR / "Pharma"
 HERBAL_DIR = DATA_DIR / "Herbal"
 AGROVET_DIR = DATA_DIR / "Agrovet"
+OTHER_DIR = DATA_DIR / "other"
 
 _embed_lock = threading.Lock()
 
@@ -31,11 +32,13 @@ def _count_pdfs_in_type_folders() -> set[str]:
     PHARMA_DIR.mkdir(parents=True, exist_ok=True)
     HERBAL_DIR.mkdir(parents=True, exist_ok=True)
     AGROVET_DIR.mkdir(parents=True, exist_ok=True)
+    OTHER_DIR.mkdir(parents=True, exist_ok=True)
 
     pharma = {p.name for p in PHARMA_DIR.glob("*.pdf")}
     herbal = {p.name for p in HERBAL_DIR.glob("*.pdf")}
     agrovet = {p.name for p in AGROVET_DIR.glob("*.pdf")}
-    return pharma | herbal | agrovet
+    other = {p.name for p in OTHER_DIR.glob("*.pdf")}
+    return pharma | herbal | agrovet | other
 
 
 def create_app():
@@ -55,9 +58,9 @@ def create_app():
         print("Received ingest request...")
 
         train_type = (request.form.get("train_type") or "").strip().lower()
-        if train_type not in {"pharma", "herbal", "agrovet"}:
+        if train_type not in {"pharma", "herbal", "agrovet", "other"}:
             return jsonify(
-                {"error": "Invalid or missing product type. Select Pharma, Herbal, or Agrovet first."}
+                {"error": "Invalid or missing product type. Select Pharma, Herbal, or Other first."}
             ), 400
 
         upload_dir = DATA_DIR / train_type.capitalize()

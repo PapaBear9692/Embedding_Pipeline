@@ -1,6 +1,6 @@
 import json
 import shutil
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 from pathlib import Path
 
 from llama_index.core import VectorStoreIndex
@@ -11,7 +11,7 @@ from app_config import init_settings_and_storage
 from ocr import run_ocr
 
 
-ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet", "other"}
 
 
 def _normalize_type(t: Optional[str]) -> Optional[str]:
@@ -27,7 +27,7 @@ def _iter_types(train_type: Optional[str]) -> List[str]:
     If None -> all types
     """
     t = _normalize_type(train_type)
-    return [t] if t else ["pharma", "herbal", "agrovet"]
+    return [t] if t else ["pharma", "herbal", "agrovet", "other"]
 
 
 def _cap_type(t: str) -> str:
@@ -49,6 +49,10 @@ def update_list(storage_context, documents, train_type: str) -> None:
     t = _normalize_type(train_type)
     if not t:
         raise ValueError(f"Invalid train_type for update_list: {train_type}")
+    
+    # If train type is "Other" then no node needs to be updated
+    if t == "other":
+        return
 
     node_id = _prime_node_id(t)
 

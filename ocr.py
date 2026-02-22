@@ -42,7 +42,7 @@ ENV_PATH = ROOT_DIR / ".env"
 DATA_DIR = ROOT_DIR / "data"
 TRAIN_DATA_DIR = DATA_DIR / "train_data"
 
-ALLOWED_TYPES = {"pharma", "herbal", "agrovet"}
+ALLOWED_TYPES = {"pharma", "herbal", "agrovet", "other"}
 
 
 def _normalize_type(t: Optional[str]) -> Optional[str]:
@@ -62,7 +62,7 @@ def _iter_types(train_type: Optional[str]) -> List[str]:
     If None -> ["pharma", "herbal", "agrovet"]
     """
     t = _normalize_type(train_type)
-    return [t] if t else ["pharma", "herbal", "agrovet"]
+    return [t] if t else ["pharma", "herbal", "agrovet", "other"]
 
 
 def _in_dir_for_type(t: str) -> Path:

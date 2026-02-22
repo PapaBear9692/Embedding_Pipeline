@@ -148,7 +148,7 @@ function setDisabled(disabled) {
 // Dropdown label helper
 function setTrainingTypeLabel(type) {
   const t = String(type || "").toLowerCase();
-  const label = t === "herbal" ? "Herbal" : t === "pharma" ? "Pharma" : "Select Type";
+  const label = t === "herbal" ? "Herbal" : t === "pharma" ? "Pharma" : t === "other" ? "Other": "Select Type";
 
   if (trainingTypeDropdown) {
     trainingTypeDropdown.innerHTML = `<i class="bi bi-sliders"></i> ${label}`;
